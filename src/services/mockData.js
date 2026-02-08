@@ -225,6 +225,7 @@ export const mockData = {
     ],
 
     User: [
+        { id: 'user_0', email: 'thomas.menut43@gmail.com', full_name: 'Thomas Menut', role: 'admin', restaurantId: null },
         { id: 'user_1', email: 'admin@restaurant.fr', full_name: 'Admin Système', role: 'admin', restaurantId: null },
         { id: 'user_2', email: 'manager@petitbistrot.fr', full_name: 'Pierre Manager', role: 'manager', restaurantId: 'rest_1' },
         { id: 'user_3', email: 'client@email.fr', full_name: 'Client Test', role: 'customer', restaurantId: null }

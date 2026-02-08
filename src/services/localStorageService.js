@@ -2,7 +2,7 @@
 // Provides CRUD operations persisted to localStorage
 
 import { mockData } from './mockData.js';
-import { supabase, supabaseAuth } from '@/lib/supabaseClient';
+import { supabase, supabaseAuth, getUserRole } from '@/lib/supabaseClient';
 
 const STORAGE_PREFIX = 'table_reservee_';
 
@@ -164,8 +164,7 @@ export const entities = {
   WaitlistRequest: createEntityService('WaitlistRequest')
 };
 
-// Auth service - Using Supabase Auth
-
+// Auth service - Using Supabase Auth with persistent sessions
 export const auth = {
   currentUser: null,
 
@@ -177,14 +176,15 @@ export const auth = {
     try {
       const session = await supabaseAuth.getSession();
       if (session?.user) {
+        const role = getUserRole(session.user.email);
         return {
           id: session.user.id,
           email: session.user.email,
-          full_name: session.user.user_metadata?.full_name || session.user.email,
-          role: session.user.user_metadata?.role || 'restaurateur',
-          restaurantId: session.user.user_metadata?.restaurantId,
-          subscriptionStatus: session.user.user_metadata?.subscriptionStatus,
-          subscriptionEndDate: session.user.user_metadata?.subscriptionEndDate
+          full_name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
+          role: role,
+          restaurantId: session.user.user_metadata?.restaurantId || null,
+          subscriptionStatus: session.user.user_metadata?.subscriptionStatus || null,
+          subscriptionEndDate: session.user.user_metadata?.subscriptionEndDate || null
         };
       }
       return null;
@@ -196,16 +196,17 @@ export const auth = {
 
   login: async (email, password) => {
     const user = await supabaseAuth.signIn(email, password);
-    auth.currentUser = user;
-    return {
+    const role = getUserRole(email);
+    auth.currentUser = {
       id: user.id,
       email: user.email,
-      full_name: user.user_metadata?.full_name || user.email,
-      role: user.user_metadata?.role || 'restaurateur',
-      restaurantId: user.user_metadata?.restaurantId,
-      subscriptionStatus: user.user_metadata?.subscriptionStatus,
-      subscriptionEndDate: user.user_metadata?.subscriptionEndDate
+      full_name: user.user_metadata?.full_name || user.email.split('@')[0],
+      role: role,
+      restaurantId: user.user_metadata?.restaurantId || null,
+      subscriptionStatus: user.user_metadata?.subscriptionStatus || null,
+      subscriptionEndDate: user.user_metadata?.subscriptionEndDate || null
     };
+    return auth.currentUser;
   },
 
   logout: async () => {

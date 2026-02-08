@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { 
-  Menu, Search, Users, Shield, Building2, Mail, 
-  Power, UserPlus, Store, UserCircle
+import { userManagement } from '@/lib/supabaseClient';
+import {
+  Menu, Search, Users, Shield, Building2, Mail,
+  Power, UserPlus, Store, UserCircle, Eye, EyeOff, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,66 +35,119 @@ export default function AdminUsers() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('restaurants');
-  const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [inviteData, setInviteData] = useState({
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createData, setCreateData] = useState({
     email: '',
-    role: 'user',
+    password: '',
+    full_name: '',
+    role: 'restaurateur',
     restaurantId: ''
   });
   const queryClient = useQueryClient();
-  
+
   useEffect(() => {
     base44.auth.me().then(setUser);
   }, []);
-  
+
   const isAdmin = user?.role === 'admin';
-  
-  const { data: users = [], isLoading } = useQuery({
-    queryKey: ['all-users'],
-    queryFn: () => base44.entities.User.list(),
+
+  // Fetch users from Supabase profiles table
+  const { data: users = [], isLoading, refetch: refetchUsers } = useQuery({
+    queryKey: ['supabase-profiles'],
+    queryFn: async () => {
+      try {
+        return await userManagement.getProfiles();
+      } catch (error) {
+        console.error('Error fetching profiles:', error);
+        // Fallback to local storage if profiles table doesn't exist yet
+        return await base44.entities.User.list();
+      }
+    },
     enabled: isAdmin
   });
-  
+
   const { data: restaurants = [] } = useQuery({
     queryKey: ['all-restaurants'],
     queryFn: () => base44.entities.Restaurant.list(),
     enabled: isAdmin
   });
-  
-  const updateUser = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.User.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['all-users']);
+
+  // Handle user creation
+  const handleCreateUser = async () => {
+    if (!createData.email || !createData.password) {
+      toast.error('Email et mot de passe requis');
+      return;
     }
-  });
-  
-  const handleInvite = async () => {
-    await base44.users.inviteUser(inviteData.email, inviteData.role);
-    toast.success('Invitation envoyée. Vous pourrez assigner le restaurant après la première connexion.');
-    setIsInviteOpen(false);
-    setInviteData({ email: '', role: 'user', restaurantId: '' });
-    queryClient.invalidateQueries(['all-users']);
+
+    if (createData.password.length < 6) {
+      toast.error('Le mot de passe doit contenir au moins 6 caractères');
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const newUser = await userManagement.createUserWithProfile(
+        createData.email,
+        createData.password,
+        {
+          full_name: createData.full_name || createData.email.split('@')[0],
+          role: createData.role,
+          restaurantId: createData.restaurantId || null
+        }
+      );
+
+      if (newUser.needsEmailConfirmation) {
+        toast.success(`Utilisateur créé ! Un email de confirmation a été envoyé à ${createData.email}`);
+      } else {
+        toast.success('Utilisateur créé avec succès !');
+      }
+
+      setIsCreateOpen(false);
+      setCreateData({ email: '', password: '', full_name: '', role: 'restaurateur', restaurantId: '' });
+      refetchUsers();
+    } catch (error) {
+      console.error('Error creating user:', error);
+      if (error.message?.includes('already registered')) {
+        toast.error('Cet email est déjà utilisé');
+      } else {
+        toast.error(`Erreur: ${error.message}`);
+      }
+    } finally {
+      setIsCreating(false);
+    }
   };
-  
-  const toggleDisabled = (targetUser) => {
-    updateUser.mutate({
-      id: targetUser.id,
-      data: { isDisabled: !targetUser.isDisabled }
-    });
+
+  // Toggle user disabled status
+  const toggleDisabled = async (targetUser) => {
+    try {
+      await userManagement.toggleUserDisabled(targetUser.id, !targetUser.is_disabled);
+      toast.success(targetUser.is_disabled ? 'Utilisateur activé' : 'Utilisateur désactivé');
+      refetchUsers();
+    } catch (error) {
+      console.error('Error toggling user:', error);
+      toast.error('Erreur lors de la modification');
+    }
   };
-  
-  const assignRestaurant = (targetUser, restaurantId) => {
-    updateUser.mutate({
-      id: targetUser.id,
-      data: { restaurantId: restaurantId || null }
-    });
+
+  // Assign restaurant to user
+  const assignRestaurant = async (targetUser, restaurantId) => {
+    try {
+      await userManagement.assignRestaurant(targetUser.id, restaurantId || null);
+      toast.success('Restaurant assigné');
+      refetchUsers();
+    } catch (error) {
+      console.error('Error assigning restaurant:', error);
+      toast.error('Erreur lors de l\'assignation');
+    }
   };
-  
+
   // Separate users by category
-  const restaurantUsers = users.filter(u => u.role !== 'admin' && u.restaurantId);
-  const regularUsers = users.filter(u => u.role !== 'admin' && !u.restaurantId);
+  const restaurantUsers = users.filter(u => u.role !== 'admin' && u.restaurant_id);
+  const regularUsers = users.filter(u => u.role !== 'admin' && !u.restaurant_id);
   const adminUsers = users.filter(u => u.role === 'admin');
-  
+
   // Filter users based on active tab and search
   const getFilteredUsers = () => {
     let usersToFilter = [];
@@ -104,22 +158,22 @@ export default function AdminUsers() {
     } else {
       usersToFilter = adminUsers;
     }
-    
+
     if (!searchQuery) return usersToFilter;
     const query = searchQuery.toLowerCase();
-    return usersToFilter.filter(u => 
+    return usersToFilter.filter(u =>
       u.email?.toLowerCase().includes(query) || u.full_name?.toLowerCase().includes(query)
     );
   };
-  
+
   const filteredUsers = getFilteredUsers();
-  
+
   // Get restaurant name
   const getRestaurantName = (restaurantId) => {
     const restaurant = restaurants.find(r => r.id === restaurantId);
     return restaurant?.name || null;
   };
-  
+
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -130,16 +184,16 @@ export default function AdminUsers() {
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar 
-        user={user} 
+      <Sidebar
+        user={user}
         isAdmin={true}
         isMobileOpen={isMobileOpen}
         setIsMobileOpen={setIsMobileOpen}
       />
-      
+
       <div className="flex-1 min-w-0">
         {/* Header */}
         <header className="bg-white border-b sticky top-0 z-30">
@@ -155,14 +209,14 @@ export default function AdminUsers() {
               </Button>
               <h1 className="text-xl font-bold text-gray-900">Utilisateurs</h1>
             </div>
-            
-            <Button onClick={() => setIsInviteOpen(true)}>
+
+            <Button onClick={() => setIsCreateOpen(true)}>
               <UserPlus className="h-4 w-4 mr-2" />
-              Inviter
+              Créer un utilisateur
             </Button>
           </div>
         </header>
-        
+
         {/* Content */}
         <main className="p-4 lg:p-8">
           {/* Stats */}
@@ -201,7 +255,7 @@ export default function AdminUsers() {
               </CardContent>
             </Card>
           </div>
-          
+
           {/* Search */}
           <div className="mb-6">
             <div className="relative max-w-md">
@@ -214,7 +268,7 @@ export default function AdminUsers() {
               />
             </div>
           </div>
-          
+
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
             <TabsList>
@@ -231,141 +285,201 @@ export default function AdminUsers() {
                 Admins ({adminUsers.length})
               </TabsTrigger>
             </TabsList>
-            
-            <TabsContent value={activeTab} className="mt-4">
-              <Card>
-                <CardContent className="p-0">
-                  <div className="divide-y">
-                    {filteredUsers.map(targetUser => (
-                  <div key={targetUser.id} className={`p-4 ${targetUser.isDisabled ? 'opacity-50' : ''}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                          <span className="font-medium text-gray-600">
-                            {targetUser.full_name?.[0] || targetUser.email?.[0] || '?'}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{targetUser.full_name || 'Sans nom'}</p>
-                            <Badge variant={targetUser.role === 'admin' ? 'default' : 'secondary'}>
-                              {targetUser.role === 'admin' ? 'Admin' : 'Utilisateur'}
-                            </Badge>
-                            {targetUser.isDisabled && (
-                              <Badge variant="destructive">Désactivé</Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-500 flex items-center gap-1">
-                            <Mail className="h-3 w-3" />
-                            {targetUser.email}
-                          </p>
-                          {targetUser.restaurantId && (
-                            <p className="text-sm text-emerald-600 flex items-center gap-1">
-                              <Building2 className="h-3 w-3" />
-                              {getRestaurantName(targetUser.restaurantId)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        <Select
-                          value={targetUser.restaurantId || 'none'}
-                          onValueChange={(value) => assignRestaurant(targetUser, value === 'none' ? null : value)}
-                        >
-                          <SelectTrigger className="w-[200px]">
-                            <SelectValue placeholder="Assigner restaurant" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Aucun restaurant</SelectItem>
-                            {restaurants.map(restaurant => (
-                              <SelectItem key={restaurant.id} value={restaurant.id}>
-                                {restaurant.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => toggleDisabled(targetUser)}
-                          disabled={targetUser.id === user?.id}
-                        >
-                          <Power className="h-4 w-4 mr-1" />
-                          {targetUser.isDisabled ? 'Activer' : 'Désactiver'}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                </div>
-                </CardContent>
-                </Card>
 
-                {filteredUsers.length === 0 && (
-                <div className="text-center py-12">
-                <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">Aucun utilisateur trouvé</p>
+            <TabsContent value={activeTab} className="mt-4">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
                 </div>
-                )}
-                </TabsContent>
-                </Tabs>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="divide-y">
+                      {filteredUsers.map(targetUser => (
+                        <div key={targetUser.id} className={`p-4 ${targetUser.is_disabled ? 'opacity-50' : ''}`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                                <span className="font-medium text-gray-600">
+                                  {targetUser.full_name?.[0] || targetUser.email?.[0] || '?'}
+                                </span>
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium">{targetUser.full_name || 'Sans nom'}</p>
+                                  <Badge variant={targetUser.role === 'admin' ? 'default' : 'secondary'}>
+                                    {targetUser.role === 'admin' ? 'Admin' : 'Restaurateur'}
+                                  </Badge>
+                                  {targetUser.is_disabled && (
+                                    <Badge variant="destructive">Désactivé</Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-gray-500 flex items-center gap-1">
+                                  <Mail className="h-3 w-3" />
+                                  {targetUser.email}
+                                </p>
+                                {targetUser.restaurant_id && (
+                                  <p className="text-sm text-emerald-600 flex items-center gap-1">
+                                    <Building2 className="h-3 w-3" />
+                                    {getRestaurantName(targetUser.restaurant_id)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <Select
+                                value={targetUser.restaurant_id || 'none'}
+                                onValueChange={(value) => assignRestaurant(targetUser, value === 'none' ? null : value)}
+                              >
+                                <SelectTrigger className="w-[200px]">
+                                  <SelectValue placeholder="Assigner restaurant" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Aucun restaurant</SelectItem>
+                                  {restaurants.map(restaurant => (
+                                    <SelectItem key={restaurant.id} value={restaurant.id}>
+                                      {restaurant.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toggleDisabled(targetUser)}
+                                disabled={targetUser.id === user?.id}
+                              >
+                                <Power className="h-4 w-4 mr-1" />
+                                {targetUser.is_disabled ? 'Activer' : 'Désactiver'}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!isLoading && filteredUsers.length === 0 && (
+                <div className="text-center py-12">
+                  <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">Aucun utilisateur trouvé</p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </main>
       </div>
-      
-      {/* Invite Dialog */}
-      <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+
+      {/* Create User Dialog */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Inviter un utilisateur</DialogTitle>
+            <DialogTitle>Créer un utilisateur</DialogTitle>
             <DialogDescription>
-              Un email d'invitation sera envoyé à l'adresse indiquée.
+              L'utilisateur recevra un email de confirmation pour activer son compte.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Email</Label>
+              <Label>Nom complet</Label>
               <Input
-                type="email"
-                value={inviteData.email}
-                onChange={(e) => setInviteData({ ...inviteData, email: e.target.value })}
-                placeholder="email@example.com"
+                value={createData.full_name}
+                onChange={(e) => setCreateData({ ...createData, full_name: e.target.value })}
+                placeholder="Jean Dupont"
               />
             </div>
-            
+
+            <div className="space-y-2">
+              <Label>Email *</Label>
+              <Input
+                type="email"
+                value={createData.email}
+                onChange={(e) => setCreateData({ ...createData, email: e.target.value })}
+                placeholder="email@example.com"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Mot de passe temporaire *</Label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  value={createData.password}
+                  onChange={(e) => setCreateData({ ...createData, password: e.target.value })}
+                  placeholder="Minimum 6 caractères"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 -translate-y-1/2"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500">L'utilisateur pourra changer son mot de passe après connexion</p>
+            </div>
+
             <div className="space-y-2">
               <Label>Rôle</Label>
               <Select
-                value={inviteData.role}
-                onValueChange={(value) => setInviteData({ ...inviteData, role: value })}
+                value={createData.role}
+                onValueChange={(value) => setCreateData({ ...createData, role: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">Utilisateur (Restaurateur)</SelectItem>
+                  <SelectItem value="restaurateur">Restaurateur</SelectItem>
                   <SelectItem value="admin">Administrateur</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            
-            {inviteData.role === 'user' && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  💡 Pour les restaurateurs, vous pourrez assigner le restaurant après leur première connexion dans la liste des utilisateurs ci-dessus.
-                </p>
+
+            {createData.role === 'restaurateur' && (
+              <div className="space-y-2">
+                <Label>Restaurant (optionnel)</Label>
+                <Select
+                  value={createData.restaurantId || 'none'}
+                  onValueChange={(value) => setCreateData({ ...createData, restaurantId: value === 'none' ? '' : value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Assigner plus tard" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Assigner plus tard</SelectItem>
+                    {restaurants.map(restaurant => (
+                      <SelectItem key={restaurant.id} value={restaurant.id}>
+                        {restaurant.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
-          
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsInviteOpen(false)}>
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isCreating}>
               Annuler
             </Button>
-            <Button onClick={handleInvite} disabled={!inviteData.email}>
-              Envoyer l'invitation
+            <Button onClick={handleCreateUser} disabled={!createData.email || !createData.password || isCreating}>
+              {isCreating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Création...
+                </>
+              ) : (
+                'Créer l\'utilisateur'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

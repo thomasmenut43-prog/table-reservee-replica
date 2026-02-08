@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { supabase, supabaseAuth } from '@/lib/supabaseClient';
+import { supabase, supabaseAuth, getUserRole, ADMIN_EMAIL } from '@/lib/supabaseClient';
 import { base44 } from '@/api/base44Client';
 
 const AuthContext = createContext();
@@ -12,20 +12,46 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState(null);
   const [appPublicSettings, setAppPublicSettings] = useState(null);
 
+  // Transform Supabase user to app user format
+  const transformUser = (supabaseUser) => {
+    if (!supabaseUser) return null;
+    const role = getUserRole(supabaseUser.email);
+    return {
+      id: supabaseUser.id,
+      email: supabaseUser.email,
+      full_name: supabaseUser.user_metadata?.full_name || supabaseUser.email.split('@')[0],
+      role: role,
+      restaurantId: supabaseUser.user_metadata?.restaurantId || null,
+      subscriptionStatus: supabaseUser.user_metadata?.subscriptionStatus || null,
+      subscriptionEndDate: supabaseUser.user_metadata?.subscriptionEndDate || null
+    };
+  };
+
   useEffect(() => {
-    // Listen to auth state changes
+    // Check for existing session on mount
+    const initAuth = async () => {
+      try {
+        const session = await supabaseAuth.getSession();
+        if (session?.user) {
+          const userData = transformUser(session.user);
+          setUser(userData);
+          setIsAuthenticated(true);
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
+      } finally {
+        setIsLoadingAuth(false);
+      }
+    };
+
+    initAuth();
+
+    // Listen to auth state changes for persistent sessions
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', event);
         if (session?.user) {
-          const userData = {
-            id: session.user.id,
-            email: session.user.email,
-            full_name: session.user.user_metadata?.full_name || session.user.email,
-            role: session.user.user_metadata?.role || 'restaurateur',
-            restaurantId: session.user.user_metadata?.restaurantId,
-            subscriptionStatus: session.user.user_metadata?.subscriptionStatus,
-            subscriptionEndDate: session.user.user_metadata?.subscriptionEndDate
-          };
+          const userData = transformUser(session.user);
           setUser(userData);
           setIsAuthenticated(true);
         } else {
@@ -36,8 +62,15 @@ export const AuthProvider = ({ children }) => {
       }
     );
 
-    // Initial check
-    checkAppState();
+    // Load platform settings
+    base44.entities.PlatformSettings.filter({ settingKey: 'design' })
+      .then(result => {
+        setAppPublicSettings(result[0] || null);
+        setIsLoadingPublicSettings(false);
+      })
+      .catch(() => {
+        setIsLoadingPublicSettings(false);
+      });
 
     return () => {
       subscription.unsubscribe();
@@ -47,54 +80,24 @@ export const AuthProvider = ({ children }) => {
   const checkAppState = async () => {
     try {
       setIsLoadingPublicSettings(true);
-      setIsLoadingAuth(true);
-      setAuthError(null);
-
-      // Load platform settings from local storage
       const settings = await base44.entities.PlatformSettings.filter({ settingKey: 'design' });
       setAppPublicSettings(settings[0] || null);
-
-      // Check if user is logged in (from Supabase)
-      const session = await supabaseAuth.getSession();
-      if (session?.user) {
-        const userData = {
-          id: session.user.id,
-          email: session.user.email,
-          full_name: session.user.user_metadata?.full_name || session.user.email,
-          role: session.user.user_metadata?.role || 'restaurateur',
-          restaurantId: session.user.user_metadata?.restaurantId,
-          subscriptionStatus: session.user.user_metadata?.subscriptionStatus,
-          subscriptionEndDate: session.user.user_metadata?.subscriptionEndDate
-        };
-        setUser(userData);
-        setIsAuthenticated(true);
-      }
-
       setIsLoadingPublicSettings(false);
-      setIsLoadingAuth(false);
     } catch (error) {
-      console.error('App state check failed:', error);
+      console.error('Error loading settings:', error);
       setIsLoadingPublicSettings(false);
-      setIsLoadingAuth(false);
     }
   };
 
   const login = async (email, password) => {
     try {
       const supabaseUser = await supabaseAuth.signIn(email, password);
-      const userData = {
-        id: supabaseUser.id,
-        email: supabaseUser.email,
-        full_name: supabaseUser.user_metadata?.full_name || supabaseUser.email,
-        role: supabaseUser.user_metadata?.role || 'restaurateur',
-        restaurantId: supabaseUser.user_metadata?.restaurantId,
-        subscriptionStatus: supabaseUser.user_metadata?.subscriptionStatus,
-        subscriptionEndDate: supabaseUser.user_metadata?.subscriptionEndDate
-      };
+      const userData = transformUser(supabaseUser);
       setUser(userData);
       setIsAuthenticated(true);
       return userData;
     } catch (error) {
+      console.error('Login error:', error);
       throw new Error('Email ou mot de passe incorrect');
     }
   };

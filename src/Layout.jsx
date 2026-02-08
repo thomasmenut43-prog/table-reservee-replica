@@ -44,6 +44,7 @@ function LayoutContent({ children, currentPageName }) {
   const [settings, setSettings] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const { isDark, toggleTheme } = useTheme() || { isDark: false, toggleTheme: () => { } };
 
@@ -68,12 +69,13 @@ function LayoutContent({ children, currentPageName }) {
     e.preventDefault();
     setLoginError('');
     try {
-      const loggedInUser = await base44.auth.login(loginEmail, 'demo');
+      const loggedInUser = await base44.auth.login(loginEmail, loginPassword);
       setUser(loggedInUser);
       setShowLoginModal(false);
       setLoginEmail('');
+      setLoginPassword('');
     } catch (error) {
-      setLoginError('Email non trouvé. Utilisez: admin@restaurant.fr, manager@petitbistrot.fr, ou client@email.fr');
+      setLoginError('Email ou mot de passe incorrect');
     }
   };
 
@@ -113,17 +115,20 @@ function LayoutContent({ children, currentPageName }) {
                 required
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Mot de passe</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Votre mot de passe"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                required
+              />
+            </div>
             {loginError && (
               <p className="text-sm text-red-600">{loginError}</p>
             )}
-            <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-600">
-              <p className="font-medium mb-1">Comptes de démo :</p>
-              <ul className="space-y-1 text-xs">
-                <li>• <code>admin@restaurant.fr</code> (Admin)</li>
-                <li>• <code>manager@petitbistrot.fr</code> (Manager)</li>
-                <li>• <code>client@email.fr</code> (Client)</li>
-              </ul>
-            </div>
             <Button type="submit" className="w-full">
               Se connecter
             </Button>
