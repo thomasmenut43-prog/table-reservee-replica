@@ -1,0 +1,139 @@
+import React, { useState, useEffect } from 'react';
+import { Download, Smartphone, Share, Home, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle } from
+'@/components/ui/dialog';
+
+export default function InstallPWA() {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [showIOSModal, setShowIOSModal] = useState(false);
+
+  useEffect(() => {
+    // Vérifier si c'est un appareil mobile
+    const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    setIsMobile(mobile);
+
+    // Vérifier si c'est un appareil iOS
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(iOS);
+
+    // Pour Android/Chrome - écouter l'événement beforeinstallprompt
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleButtonClick = async () => {
+    // Si on a le prompt natif disponible (Android/Chrome/Edge)
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    }
+    // iOS - Afficher les instructions
+    else if (isIOS) {
+      setShowIOSModal(true);
+    }
+    // Desktop - L'app est peut-être déjà installée
+    else {
+      alert("L'application est peut-être déjà installée. Vérifiez dans le menu de votre navigateur (⋮) > 'Installer RestoPonot' ou regardez dans vos applications installées.");
+    }
+  };
+
+  return (
+    <>
+      <button
+        onClick={handleButtonClick} className="bg-orange-400 text-white px-5 py-2.5 text-sm font-semibold rounded-xl inline-flex items-center gap-2 from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg transition-all duration-300 hover:scale-105">
+
+
+        <Smartphone className="h-4 w-4" />
+        <span>Télécharger l'App</span>
+      </button>
+
+      {/* iOS Installation Modal */}
+      <Dialog open={showIOSModal} onOpenChange={setShowIOSModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center text-xl">
+              Installer RestoPonot
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+                <Smartphone className="h-8 w-8 text-blue-600" />
+              </div>
+              <p className="text-gray-600 mb-6">
+                Installez l'application sur votre iPhone pour un accès rapide
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex gap-4 items-start">
+                <div className="flex items-center justify-center w-8 h-8 bg-blue-500 text-white rounded-full flex-shrink-0 font-semibold">
+                  1
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-700">
+                    Appuyez sur le bouton <strong>Partager</strong> <Share className="inline h-4 w-4 text-blue-500" /> en bas de Safari
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 items-start">
+                <div className="flex items-center justify-center w-8 h-8 bg-blue-500 text-white rounded-full flex-shrink-0 font-semibold">
+                  2
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-700">
+                    Sélectionnez <strong>"Sur l'écran d'accueil"</strong> <Home className="inline h-4 w-4 text-blue-500" />
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 items-start">
+                <div className="flex items-center justify-center w-8 h-8 bg-blue-500 text-white rounded-full flex-shrink-0 font-semibold">
+                  3
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-700">
+                    Appuyez sur <strong>"Ajouter"</strong> pour terminer
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 rounded-lg p-4 text-center">
+              <p className="text-xs text-blue-800">
+                💡 L'application apparaîtra sur votre écran d'accueil
+              </p>
+            </div>
+          </div>
+
+          <Button
+            onClick={() => setShowIOSModal(false)}
+            className="w-full">
+
+            Compris
+          </Button>
+        </DialogContent>
+      </Dialog>
+    </>);
+
+}
