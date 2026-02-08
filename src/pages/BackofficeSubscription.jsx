@@ -35,16 +35,16 @@ export default function BackofficeSubscription() {
 
   if (isSubscribed) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-2xl w-full">
-          <Card className="bg-white/5 backdrop-blur-sm border-white/10">
+          <Card className="bg-white border-gray-200 shadow-lg">
             <CardContent className="p-12 text-center">
-              <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 className="h-10 w-10 text-green-400" />
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 className="h-10 w-10 text-green-600" />
               </div>
-              <h2 className="text-3xl font-bold text-white mb-3">Offre Active</h2>
-              <p className="text-gray-300 mb-2">Votre offre RestoPonot est active</p>
-              <p className="text-gray-400 text-sm mb-8">
+              <h2 className="text-3xl font-bold text-gray-900 mb-3">Offre Active</h2>
+              <p className="text-gray-600 mb-2">Votre offre RestoPonot est active</p>
+              <p className="text-gray-500 text-sm mb-8">
                 Valide jusqu'au {user?.subscriptionEndDate ? new Date(user.subscriptionEndDate).toLocaleDateString('fr-FR') : ''}
               </p>
               <Button
@@ -67,8 +67,9 @@ export default function BackofficeSubscription() {
       price: '49',
       description: 'Pour les petits établissements',
       icon: Zap,
-      color: 'text-blue-400',
-      bgColor: 'bg-blue-500/20',
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-100',
+      borderColor: 'border-blue-200',
       stripeUrl: 'https://buy.stripe.com/4gMeVc460eFdaAk9IE7N608',
       features: [
         'Gestion des réservations',
@@ -85,8 +86,9 @@ export default function BackofficeSubscription() {
       popular: true,
       description: 'La solution complète recommandée',
       icon: Crown,
-      color: 'text-amber-400',
-      bgColor: 'bg-amber-500/20',
+      color: 'text-amber-600',
+      bgColor: 'bg-amber-100',
+      borderColor: 'border-amber-300',
       stripeUrl: 'https://buy.stripe.com/14A00i460bt15g04ok7N609',
       features: [
         'Tout du pack Essentiel',
@@ -103,8 +105,9 @@ export default function BackofficeSubscription() {
       price: '109',
       description: 'Pour les établissements exigeants',
       icon: Shield,
-      color: 'text-purple-400',
-      bgColor: 'bg-purple-500/20',
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-100',
+      borderColor: 'border-purple-200',
       stripeUrl: 'https://buy.stripe.com/7sY5kCdGA9kTaAk2gc7N60a',
       features: [
         'Tout du pack Restaurateur',
@@ -118,17 +121,17 @@ export default function BackofficeSubscription() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-y-auto">
+    <div className="min-h-screen bg-gray-50 overflow-y-auto">
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/20 backdrop-blur-sm rounded-full text-amber-300 text-sm mb-4">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 rounded-full text-amber-700 text-sm mb-4">
             <Sparkles className="h-4 w-4" />
             Nouveaux Tarifs
           </div>
-          <h1 className="text-4xl font-bold text-white mb-4">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
             Des offres adaptées à vos besoins
           </h1>
-          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-600 text-lg max-w-2xl mx-auto">
             Choisissez la formule qui correspond le mieux à votre activité et commencez à optimiser votre gestion dès aujourd'hui.
           </p>
         </div>
@@ -137,7 +140,7 @@ export default function BackofficeSubscription() {
           {offers.map((offer) => (
             <Card
               key={offer.id}
-              className={`bg-white/5 backdrop-blur-sm border-white/10 flex flex-col relative ${offer.popular ? 'border-amber-500/50 shadow-lg shadow-amber-900/20 scale-105 z-10' : ''
+              className={`bg-white border-gray-200 shadow-md flex flex-col relative ${offer.popular ? 'border-amber-400 shadow-xl shadow-amber-100 scale-105 z-10' : ''
                 }`}
             >
               {offer.popular && (
@@ -147,15 +150,15 @@ export default function BackofficeSubscription() {
               )}
 
               <CardHeader className="text-center pt-8">
-                <div className="mx-auto mb-4 w-12 h-12 rounded-lg flex items-center justify-center bg-white/5">
+                <div className={`mx-auto mb-4 w-12 h-12 rounded-lg flex items-center justify-center ${offer.bgColor}`}>
                   <offer.icon className={`h-6 w-6 ${offer.color}`} />
                 </div>
-                <CardTitle className="text-2xl text-white mb-2">{offer.name}</CardTitle>
+                <CardTitle className="text-2xl text-gray-900 mb-2">{offer.name}</CardTitle>
                 <div className="flex justify-center items-baseline gap-1 mb-2">
-                  <span className="text-4xl font-bold text-white">{offer.price}€</span>
-                  <span className="text-gray-400">/mois</span>
+                  <span className="text-4xl font-bold text-gray-900">{offer.price}€</span>
+                  <span className="text-gray-500">/mois</span>
                 </div>
-                <CardDescription className="text-gray-400 min-h-[40px]">
+                <CardDescription className="text-gray-500 min-h-[40px]">
                   {offer.description}
                 </CardDescription>
               </CardHeader>
@@ -163,7 +166,7 @@ export default function BackofficeSubscription() {
               <CardContent className="flex-1">
                 <div className="space-y-4">
                   {offer.features.map((feature, i) => (
-                    <div key={i} className="flex items-start gap-3 text-gray-300 text-sm">
+                    <div key={i} className="flex items-start gap-3 text-gray-700 text-sm">
                       <div className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-full ${offer.bgColor} flex items-center justify-center`}>
                         <Check className={`h-2.5 w-2.5 ${offer.color}`} />
                       </div>
@@ -177,7 +180,7 @@ export default function BackofficeSubscription() {
                 <Button
                   className={`w-full h-12 font-semibold ${offer.popular
                       ? 'bg-amber-500 hover:bg-amber-600 text-white'
-                      : 'bg-white/10 hover:bg-white/20 text-white'
+                      : 'bg-gray-900 hover:bg-gray-800 text-white'
                     }`}
                   onClick={() => handleSubscribe(offer.id, offer.stripeUrl)}
                   disabled={loading && loading !== offer.id}
@@ -195,7 +198,7 @@ export default function BackofficeSubscription() {
           </p>
           <Button
             variant="outline"
-            className="bg-white/5 border-white/10 text-white hover:bg-white/10"
+            className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
             onClick={() => window.location.href = 'mailto:contact@restoponot.com'}
           >
             <Mail className="h-4 w-4 mr-2" />
