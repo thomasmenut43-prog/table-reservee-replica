@@ -143,6 +143,18 @@ export default function AdminUsers() {
     }
   };
 
+  // Change user role
+  const changeRole = async (targetUser, newRole) => {
+    try {
+      await userManagement.updateProfile(targetUser.id, { role: newRole });
+      toast.success(`Rôle changé en ${newRole === 'admin' ? 'Admin' : 'Restaurateur'}`);
+      refetchUsers();
+    } catch (error) {
+      console.error('Error changing role:', error);
+      toast.error('Erreur lors du changement de rôle');
+    }
+  };
+
   // Separate users by category
   const restaurantUsers = users.filter(u => u.role !== 'admin' && u.restaurant_id);
   const regularUsers = users.filter(u => u.role !== 'admin' && !u.restaurant_id);
@@ -328,12 +340,28 @@ export default function AdminUsers() {
                             </div>
 
                             <div className="flex items-center gap-3">
+                              {/* Role selector */}
+                              <Select
+                                value={targetUser.role || 'restaurateur'}
+                                onValueChange={(value) => changeRole(targetUser, value)}
+                                disabled={targetUser.id === user?.id}
+                              >
+                                <SelectTrigger className="w-[140px]">
+                                  <SelectValue placeholder="Rôle" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="restaurateur">Restaurateur</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+
+                              {/* Restaurant selector */}
                               <Select
                                 value={targetUser.restaurant_id || 'none'}
                                 onValueChange={(value) => assignRestaurant(targetUser, value === 'none' ? null : value)}
                               >
-                                <SelectTrigger className="w-[200px]">
-                                  <SelectValue placeholder="Assigner restaurant" />
+                                <SelectTrigger className="w-[180px]">
+                                  <SelectValue placeholder="Restaurant" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="none">Aucun restaurant</SelectItem>
