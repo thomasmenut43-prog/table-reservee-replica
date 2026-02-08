@@ -151,6 +151,8 @@ export const entities = {
   Restaurant: createEntityService('Restaurant'),
   Reservation: createEntityService('Reservation'),
   Table: createEntityService('Table'),
+  FloorPlan: createEntityService('FloorPlan'),
+  MapObject: createEntityService('MapObject'),
   ServiceSchedule: createEntityService('ServiceSchedule'),
   TableBlock: createEntityService('TableBlock'),
   Review: createEntityService('Review'),

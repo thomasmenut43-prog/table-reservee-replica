@@ -91,6 +91,9 @@ export const mockData = {
         }
     ],
 
+    FloorPlan: [],
+    MapObject: [],
+
     Table: [
         // Le Petit Bistrot tables
         { id: 'table_1', restaurantId: 'rest_1', name: 'Table 1', seats: 2, zone: 'main', isJoinable: true, position_x: 100, position_y: 100 },
