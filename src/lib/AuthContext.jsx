@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { supabase, supabaseAuth } from '@/lib/supabaseClient';
 import { base44 } from '@/api/base44Client';
 
 const AuthContext = createContext();
@@ -12,7 +13,35 @@ export const AuthProvider = ({ children }) => {
   const [appPublicSettings, setAppPublicSettings] = useState(null);
 
   useEffect(() => {
+    // Listen to auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          const userData = {
+            id: session.user.id,
+            email: session.user.email,
+            full_name: session.user.user_metadata?.full_name || session.user.email,
+            role: session.user.user_metadata?.role || 'restaurateur',
+            restaurantId: session.user.user_metadata?.restaurantId,
+            subscriptionStatus: session.user.user_metadata?.subscriptionStatus,
+            subscriptionEndDate: session.user.user_metadata?.subscriptionEndDate
+          };
+          setUser(userData);
+          setIsAuthenticated(true);
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+        setIsLoadingAuth(false);
+      }
+    );
+
+    // Initial check
     checkAppState();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const checkAppState = async () => {
@@ -25,10 +54,19 @@ export const AuthProvider = ({ children }) => {
       const settings = await base44.entities.PlatformSettings.filter({ settingKey: 'design' });
       setAppPublicSettings(settings[0] || null);
 
-      // Check if user is logged in (from localStorage)
-      const currentUser = await base44.auth.me();
-      if (currentUser) {
-        setUser(currentUser);
+      // Check if user is logged in (from Supabase)
+      const session = await supabaseAuth.getSession();
+      if (session?.user) {
+        const userData = {
+          id: session.user.id,
+          email: session.user.email,
+          full_name: session.user.user_metadata?.full_name || session.user.email,
+          role: session.user.user_metadata?.role || 'restaurateur',
+          restaurantId: session.user.user_metadata?.restaurantId,
+          subscriptionStatus: session.user.user_metadata?.subscriptionStatus,
+          subscriptionEndDate: session.user.user_metadata?.subscriptionEndDate
+        };
+        setUser(userData);
         setIsAuthenticated(true);
       }
 
@@ -38,29 +76,41 @@ export const AuthProvider = ({ children }) => {
       console.error('App state check failed:', error);
       setIsLoadingPublicSettings(false);
       setIsLoadingAuth(false);
-      // Don't set error - allow app to work without auth
     }
   };
 
   const login = async (email, password) => {
     try {
-      const currentUser = await base44.auth.login(email, password);
-      setUser(currentUser);
+      const supabaseUser = await supabaseAuth.signIn(email, password);
+      const userData = {
+        id: supabaseUser.id,
+        email: supabaseUser.email,
+        full_name: supabaseUser.user_metadata?.full_name || supabaseUser.email,
+        role: supabaseUser.user_metadata?.role || 'restaurateur',
+        restaurantId: supabaseUser.user_metadata?.restaurantId,
+        subscriptionStatus: supabaseUser.user_metadata?.subscriptionStatus,
+        subscriptionEndDate: supabaseUser.user_metadata?.subscriptionEndDate
+      };
+      setUser(userData);
       setIsAuthenticated(true);
-      return currentUser;
+      return userData;
     } catch (error) {
       throw new Error('Email ou mot de passe incorrect');
     }
   };
 
-  const logout = () => {
-    base44.auth.logout();
-    setUser(null);
-    setIsAuthenticated(false);
+  const logout = async () => {
+    try {
+      await supabaseAuth.signOut();
+      setUser(null);
+      setIsAuthenticated(false);
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const navigateToLogin = () => {
-    // No external login - just redirect to home
     window.location.href = '/';
   };
 

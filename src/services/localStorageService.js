@@ -2,6 +2,7 @@
 // Provides CRUD operations persisted to localStorage
 
 import { mockData } from './mockData.js';
+import { supabase, supabaseAuth } from '@/lib/supabaseClient';
 
 const STORAGE_PREFIX = 'table_reservee_';
 
@@ -163,41 +164,66 @@ export const entities = {
   WaitlistRequest: createEntityService('WaitlistRequest')
 };
 
-// Simple auth service
+// Auth service - Using Supabase Auth
+
 export const auth = {
   currentUser: null,
 
   isAuthenticated: async () => {
-    const user = localStorage.getItem(`${STORAGE_PREFIX}currentUser`);
-    return !!user;
+    return await supabaseAuth.isAuthenticated();
   },
 
   me: async () => {
-    const user = localStorage.getItem(`${STORAGE_PREFIX}currentUser`);
-    return user ? JSON.parse(user) : null;
+    try {
+      const session = await supabaseAuth.getSession();
+      if (session?.user) {
+        return {
+          id: session.user.id,
+          email: session.user.email,
+          full_name: session.user.user_metadata?.full_name || session.user.email,
+          role: session.user.user_metadata?.role || 'restaurateur',
+          restaurantId: session.user.user_metadata?.restaurantId,
+          subscriptionStatus: session.user.user_metadata?.subscriptionStatus,
+          subscriptionEndDate: session.user.user_metadata?.subscriptionEndDate
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting user:', error);
+      return null;
+    }
   },
 
   login: async (email, password) => {
-    // Simple mock login - in real app would validate credentials
-    const users = await entities.User.list();
-    const user = users.find(u => u.email === email);
-    if (user) {
-      localStorage.setItem(`${STORAGE_PREFIX}currentUser`, JSON.stringify(user));
-      auth.currentUser = user;
-      return user;
-    }
-    throw new Error('Invalid credentials');
+    const user = await supabaseAuth.signIn(email, password);
+    auth.currentUser = user;
+    return {
+      id: user.id,
+      email: user.email,
+      full_name: user.user_metadata?.full_name || user.email,
+      role: user.user_metadata?.role || 'restaurateur',
+      restaurantId: user.user_metadata?.restaurantId,
+      subscriptionStatus: user.user_metadata?.subscriptionStatus,
+      subscriptionEndDate: user.user_metadata?.subscriptionEndDate
+    };
   },
 
-  logout: () => {
-    localStorage.removeItem(`${STORAGE_PREFIX}currentUser`);
+  logout: async () => {
+    await supabaseAuth.signOut();
     auth.currentUser = null;
     window.location.href = '/';
   },
 
   redirectToLogin: (returnUrl) => {
-    // No external login - just go to home
     window.location.href = '/';
+  },
+
+  updateMe: async (data) => {
+    const { data: updatedUser, error } = await supabase.auth.updateUser({
+      data: data
+    });
+    if (error) throw error;
+    return updatedUser;
   }
 };
 
