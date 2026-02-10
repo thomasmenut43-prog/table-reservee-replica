@@ -6,7 +6,6 @@ import { UtensilsCrossed, Settings, LogIn, LogOut, User, Moon, Sun, CalendarDays
 import { Button } from '@/components/ui/button';
 import { ThemeProvider, useTheme } from '@/components/ThemeProvider';
 import ScrollToTop from '@/components/ScrollToTop';
-import InstallPWA from '@/components/InstallPWA';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {

@@ -3,8 +3,12 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://bictooxiosihmzijddyu.supabase.co'
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpY3Rvb3hpb3NpaG16aWpkZHl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1Nzg4MDUsImV4cCI6MjA4NjE1NDgwNX0.6_AfuprwfOUBQ5bjXnaksRB8ChBAHcHnnYwBVZS74Ng'
 
-// Admin email - the only admin for now
-export const ADMIN_EMAIL = 'thomas.menut43@gmail.com'
+// Emails des superadmins (accès backoffice / AdminDashboard)
+export const ADMIN_EMAILS = [
+  'thomas.menut43@gmail.com',
+  'Tom.marcon@live.fr'
+]
+export const ADMIN_EMAIL = ADMIN_EMAILS[0] // rétrocompatibilité
 
 // Create Supabase client with persistent session
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -18,7 +22,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 // Helper function to get user role based on email
 export const getUserRole = (email) => {
-    if (email === ADMIN_EMAIL) {
+    if (email && ADMIN_EMAILS.some((e) => e.toLowerCase() === email.toLowerCase())) {
         return 'admin'
     }
     return 'restaurateur'

@@ -6,7 +6,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import RestaurantCard from '@/components/public/RestaurantCard';
 import SearchFilters from '@/components/public/SearchFilters';
 import TopRatedCarousel from '@/components/public/TopRatedCarousel';
-import InstallPWA from '@/components/InstallPWA';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -157,14 +156,8 @@ export default function Home() {
                 <Moon className="h-4 w-4" />
               </div>
             </div>
-            
-            <div className="flex justify-center">
-              <InstallPWA />
-            </div>
           </div>
         </div>
-        
-
       </div>
       
       {/* Main Content */}
