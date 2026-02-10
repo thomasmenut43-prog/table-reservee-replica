@@ -215,6 +215,16 @@ export const auth = {
     window.location.href = '/';
   },
 
+  /** Connexion via Google (OAuth). Redirige vers Google puis revient sur l'app. */
+  loginWithGoogle: async () => {
+    await supabaseAuth.signInWithOAuth('google');
+  },
+
+  /** Connexion via Apple (OAuth). Redirige vers Apple puis revient sur l'app. */
+  loginWithApple: async () => {
+    await supabaseAuth.signInWithOAuth('apple');
+  },
+
   redirectToLogin: (returnUrl) => {
     window.location.href = '/';
   },

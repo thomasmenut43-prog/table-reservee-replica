@@ -83,6 +83,26 @@ export const supabaseAuth = {
     isAuthenticated: async () => {
         const { data: { session } } = await supabase.auth.getSession()
         return !!session
+    },
+
+    // Sign in with OAuth (Google, Apple, etc.) - redirige vers le fournisseur puis revient sur l'app
+    signInWithOAuth: async (provider) => {
+        const redirectTo = `${window.location.origin}${window.location.pathname || '/'}`
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider,
+            options: {
+                redirectTo,
+                queryParams: {
+                    access_type: 'offline',
+                    prompt: 'consent'
+                }
+            }
+        })
+        if (error) throw error
+        if (data?.url) {
+            window.location.href = data.url
+        }
+        return data
     }
 }
 
