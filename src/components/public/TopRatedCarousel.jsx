@@ -81,7 +81,7 @@ export default function TopRatedCarousel({ restaurants }) {
                 className="flex-shrink-0 w-full lg:w-[calc(50%-0.75rem)]"
                 onClick={() => goToRestaurant(restaurant.id)}
               >
-                <div className="relative bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-lg transition-shadow cursor-pointer h-full border border-gray-100">
+                <div className="relative bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-lg transition-shadow cursor-pointer h-full border border-gray-100">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:gap-4 lg:p-6 p-0">
                     {/* Image */}
                     <div className="relative h-64 lg:h-56 lg:rounded-xl overflow-hidden rounded-none">
@@ -142,7 +142,7 @@ export default function TopRatedCarousel({ restaurants }) {
                           e.stopPropagation();
                           goToRestaurant(restaurant.id);
                         }}
-                        className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold w-full"
+                        className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold w-full rounded-3xl"
                       >
                         Réserver une table
                       </Button>

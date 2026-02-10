@@ -364,7 +364,7 @@ export default function RestaurantPage() {
               </div>
               <p className="text-sm text-gray-700">Appelez directement le restaurant pour réserver votre table !</p>
               <Button 
-                className="w-full"
+                className="w-full rounded-3xl"
                 onClick={() => {
                   if (restaurant.phone) {
                     window.location.href = `tel:${restaurant.phone}`;
@@ -605,7 +605,7 @@ export default function RestaurantPage() {
           
           {/* Right Column - Booking - Desktop Only */}
           <div className="hidden lg:block space-y-6">
-            <Card className="sticky top-4">
+            <Card className="sticky top-4 rounded-3xl">
               {isOnlineBookingEnabled ? (
                 <>
                   <CardHeader className="border-b">
@@ -632,7 +632,7 @@ export default function RestaurantPage() {
                     </div>
                     <p className="text-sm text-gray-700">Appelez directement le restaurant pour réserver votre table !</p>
                     <Button 
-                      className="w-full"
+                      className="w-full rounded-3xl"
                       onClick={() => {
                         if (restaurant.phone) {
                           window.location.href = `tel:${restaurant.phone}`;
@@ -660,7 +660,7 @@ export default function RestaurantPage() {
       <div className="lg:hidden sticky bottom-0 px-4 pb-6 pt-4 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent">
         <button
           onClick={() => setShowMobileBooking(true)}
-          className="w-full bg-gradient-to-r from-orange-400 to-orange-500 text-white text-base font-bold py-3.5 rounded-xl shadow-2xl flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform"
+          className="w-full bg-gradient-to-r from-orange-400 to-orange-500 text-white text-base font-bold py-3.5 rounded-3xl shadow-2xl flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform"
         >
           Réserver maintenant
           <ChevronRight className="w-5 h-5" strokeWidth={3} />

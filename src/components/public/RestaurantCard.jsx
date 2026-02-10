@@ -2,12 +2,14 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import StarRating from '@/components/ui/StarRating';
 
 export default function RestaurantCard({ restaurant }) {
+  const restaurantUrl = createPageUrl(`Restaurant?id=${restaurant.id}`);
   return (
-    <Link to={createPageUrl(`Restaurant?id=${restaurant.id}`)}>
-      <Card className="group overflow-hidden hover:shadow-xl transition-all duration-300 border-0 bg-white">
+    <Card className="group overflow-hidden hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-3xl">
+      <Link to={restaurantUrl} className="block">
         <div className="relative h-64 overflow-hidden">
           <img
             src={restaurant.coverPhoto || restaurant.photos?.[0] || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800'}
@@ -22,7 +24,16 @@ export default function RestaurantCard({ restaurant }) {
             <StarRating rating={restaurant.ratingAvg || 0} count={restaurant.ratingCount || 0} size="sm" />
           </div>
         </div>
-      </Card>
-    </Link>
+      </Link>
+      <div className="p-4 pt-0">
+        <Link to={restaurantUrl}>
+          <Button
+            className="w-full rounded-3xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"
+          >
+            Réserver une table
+          </Button>
+        </Link>
+      </div>
+    </Card>
   );
 }

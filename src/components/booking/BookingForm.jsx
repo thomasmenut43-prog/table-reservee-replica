@@ -573,7 +573,7 @@ export default function BookingForm({
         >
           <Button 
             type="button"
-            className="w-full h-14 rounded-xl text-lg font-semibold"
+            className="w-full h-14 rounded-3xl text-lg font-semibold"
           >
             Appeler le restaurant
           </Button>
@@ -581,7 +581,7 @@ export default function BookingForm({
       ) : (
         <Button 
           type="submit" 
-          className="w-full h-14 rounded-xl text-lg font-semibold"
+          className="w-full h-14 rounded-3xl text-lg font-semibold"
           disabled={!isFormValid || isLoading}
         >
           {isLoading ? (
