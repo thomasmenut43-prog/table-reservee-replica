@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
-import { 
-  Menu, Plus, Search, Building2, MapPin, Phone, Edit2, 
+import {
+  Menu, Plus, Search, Building2, MapPin, Phone, Edit2,
   Trash2, Power, ExternalLink, Eye, X, Tag, Upload, Image as ImageIcon, Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -65,46 +65,62 @@ export default function AdminRestaurants() {
   const [newCategory, setNewCategory] = useState('');
   const [assignedRestaurantId, setAssignedRestaurantId] = useState('');
   const queryClient = useQueryClient();
-  
+
   useEffect(() => {
     base44.auth.me().then(u => {
       setUser(u);
       if (u?.restaurantId) setAssignedRestaurantId(u.restaurantId);
     });
   }, []);
-  
+
   const isAdmin = user?.role === 'admin';
-  
+
   const { data: restaurants = [], isLoading } = useQuery({
     queryKey: ['all-restaurants'],
     queryFn: () => base44.entities.Restaurant.list(),
     enabled: isAdmin
   });
-  
+
   const { data: users = [] } = useQuery({
     queryKey: ['all-users'],
     queryFn: () => base44.entities.User.list(),
     enabled: isAdmin
   });
-  
+
   const createRestaurant = useMutation({
-    mutationFn: (data) => base44.entities.Restaurant.create(data),
+    mutationFn: (data) => {
+      console.log('Creating restaurant with data:', data);
+      return base44.entities.Restaurant.create(data);
+    },
     onSuccess: () => {
+      console.log('Restaurant created successfully');
       queryClient.invalidateQueries(['all-restaurants']);
       setIsDialogOpen(false);
       resetForm();
+    },
+    onError: (error) => {
+      console.error('Error creating restaurant:', error);
+      alert('Erreur lors de la création: ' + error.message);
     }
   });
-  
+
   const updateRestaurant = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Restaurant.update(id, data),
+    mutationFn: ({ id, data }) => {
+      console.log('Updating restaurant', id, 'with data:', data);
+      return base44.entities.Restaurant.update(id, data);
+    },
     onSuccess: () => {
+      console.log('Restaurant updated successfully');
       queryClient.invalidateQueries(['all-restaurants']);
       setIsDialogOpen(false);
       resetForm();
+    },
+    onError: (error) => {
+      console.error('Error updating restaurant:', error);
+      alert('Erreur lors de la mise à jour: ' + error.message);
     }
   });
-  
+
   const removeRestaurant = useMutation({
     mutationFn: (id) => base44.entities.Restaurant.delete(id),
     onSuccess: () => {
@@ -112,7 +128,7 @@ export default function AdminRestaurants() {
       setDeleteRestaurant(null);
     }
   });
-  
+
   const resetForm = () => {
     setEditingRestaurant(null);
     setFormData({
@@ -130,7 +146,7 @@ export default function AdminRestaurants() {
     });
     setNewCategory('');
   };
-  
+
   const openEditDialog = (restaurant) => {
     setEditingRestaurant(restaurant);
     setFormData({
@@ -148,22 +164,22 @@ export default function AdminRestaurants() {
     });
     setIsDialogOpen(true);
   };
-  
+
   const addCategory = () => {
     if (newCategory.trim() && !formData.cuisineTags.includes(newCategory.trim())) {
       setFormData({ ...formData, cuisineTags: [...formData.cuisineTags, newCategory.trim()] });
       setNewCategory('');
     }
   };
-  
+
   const removeCategory = (category) => {
     setFormData({ ...formData, cuisineTags: formData.cuisineTags.filter(c => c !== category) });
   };
-  
+
   const handleCoverPhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setUploadingCover(true);
     try {
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
@@ -174,11 +190,11 @@ export default function AdminRestaurants() {
       setUploadingCover(false);
     }
   };
-  
+
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || formData.photos.length >= 4) return;
-    
+
     setUploadingPhoto(true);
     try {
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
@@ -189,11 +205,11 @@ export default function AdminRestaurants() {
       setUploadingPhoto(false);
     }
   };
-  
+
   const removePhoto = (index) => {
     setFormData({ ...formData, photos: formData.photos.filter((_, i) => i !== index) });
   };
-  
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (editingRestaurant) {
@@ -206,32 +222,30 @@ export default function AdminRestaurants() {
         minAdvanceMinutes: 60,
         bookingWindowDays: 60,
         autoConfirmEnabled: true,
-        groupPendingThreshold: 8,
-        antiSpamMaxPerPhonePerDay: 3,
-        waitlistEnabled: true
+        groupPendingThreshold: 8
       });
     }
   };
-  
+
   const toggleActive = (restaurant) => {
     updateRestaurant.mutate({
       id: restaurant.id,
       data: { isActive: !restaurant.isActive }
     });
   };
-  
+
   // Filter restaurants
   const filteredRestaurants = restaurants.filter(r => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return r.name?.toLowerCase().includes(query) || r.city?.toLowerCase().includes(query);
   });
-  
+
   // Get restaurateur for each restaurant
   const getRestaurateur = (restaurantId) => {
     return users.find(u => u.restaurantId === restaurantId);
   };
-  
+
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -242,16 +256,16 @@ export default function AdminRestaurants() {
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar 
-        user={user} 
+      <Sidebar
+        user={user}
         isAdmin={true}
         isMobileOpen={isMobileOpen}
         setIsMobileOpen={setIsMobileOpen}
       />
-      
+
       <div className="flex-1 min-w-0">
         {/* Header */}
         <header className="bg-white border-b sticky top-0 z-30">
@@ -267,14 +281,14 @@ export default function AdminRestaurants() {
               </Button>
               <h1 className="text-xl font-bold text-gray-900">Restaurants</h1>
             </div>
-            
+
             <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
               <Plus className="h-4 w-4 mr-2" />
               Ajouter
             </Button>
           </div>
         </header>
-        
+
         {/* Content */}
         <main className="p-4 lg:p-8">
           {/* Search */}
@@ -289,20 +303,20 @@ export default function AdminRestaurants() {
               />
             </div>
           </div>
-          
+
           {/* Restaurants List */}
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredRestaurants.map(restaurant => {
               const restaurateur = getRestaurateur(restaurant.id);
-              
+
               return (
                 <Card key={restaurant.id} className={!restaurant.isActive ? 'opacity-60' : ''}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
                         {restaurant.coverPhoto ? (
-                          <img 
-                            src={restaurant.coverPhoto} 
+                          <img
+                            src={restaurant.coverPhoto}
                             alt={restaurant.name}
                             className="w-12 h-12 rounded-lg object-cover"
                           />
@@ -319,19 +333,19 @@ export default function AdminRestaurants() {
                           </div>
                         </div>
                       </div>
-                      
+
                       <Badge variant={restaurant.isActive ? 'default' : 'secondary'}>
                         {restaurant.isActive ? 'Actif' : 'Inactif'}
                       </Badge>
                     </div>
-                    
+
                     {restaurant.phone && (
                       <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
                         <Phone className="h-4 w-4" />
                         {restaurant.phone}
                       </div>
                     )}
-                    
+
                     {restaurant.cuisineTags && restaurant.cuisineTags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mb-2">
                         {restaurant.cuisineTags.map((tag, idx) => (
@@ -341,21 +355,21 @@ export default function AdminRestaurants() {
                         ))}
                       </div>
                     )}
-                    
+
                     <div className="flex items-center gap-2 mb-3">
                       <StarRating rating={restaurant.ratingAvg || 0} count={restaurant.ratingCount || 0} size="xs" />
                     </div>
-                    
+
                     {restaurateur && (
                       <div className="text-sm text-gray-500 mb-3">
                         Géré par : <span className="font-medium">{restaurateur.full_name || restaurateur.email}</span>
                       </div>
                     )}
-                    
+
                     <div className="text-xs text-gray-400 mb-3 font-mono">
                       ID: {restaurant.id}
                     </div>
-                    
+
                     <div className="flex flex-wrap items-center gap-2 pt-3 border-t">
                       {assignedRestaurantId === restaurant.id ? (
                         <Link to={createPageUrl('BackofficeDashboard')}>
@@ -365,8 +379,8 @@ export default function AdminRestaurants() {
                           </Button>
                         </Link>
                       ) : (
-                        <Button 
-                          variant="default" 
+                        <Button
+                          variant="default"
                           size="sm"
                           onClick={() => {
                             base44.auth.updateMe({ restaurantId: restaurant.id }).then(() => {
@@ -412,7 +426,7 @@ export default function AdminRestaurants() {
               );
             })}
           </div>
-          
+
           {filteredRestaurants.length === 0 && (
             <div className="text-center py-12">
               <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
@@ -421,7 +435,7 @@ export default function AdminRestaurants() {
           )}
         </main>
       </div>
-      
+
       {/* Add/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -430,7 +444,7 @@ export default function AdminRestaurants() {
               {editingRestaurant ? 'Modifier le restaurant' : 'Ajouter un restaurant'}
             </DialogTitle>
           </DialogHeader>
-          
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label>Nom *</Label>
@@ -440,7 +454,7 @@ export default function AdminRestaurants() {
                 required
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Ville *</Label>
@@ -458,7 +472,7 @@ export default function AdminRestaurants() {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label>Téléphone</Label>
               <Input
@@ -466,7 +480,7 @@ export default function AdminRestaurants() {
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label>Adresse</Label>
               <Input
@@ -474,7 +488,7 @@ export default function AdminRestaurants() {
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label>Email</Label>
               <Input
@@ -483,7 +497,7 @@ export default function AdminRestaurants() {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <Tag className="h-4 w-4" />
@@ -517,7 +531,7 @@ export default function AdminRestaurants() {
                 </div>
               )}
             </div>
-            
+
             <div className="space-y-2">
               <Label>Photo principale</Label>
               {formData.coverPhoto ? (
@@ -547,7 +561,7 @@ export default function AdminRestaurants() {
                 </label>
               )}
             </div>
-            
+
             <div className="space-y-2">
               <Label>Photos supplémentaires (max 4)</Label>
               <div className="grid grid-cols-2 gap-2">
@@ -580,7 +594,7 @@ export default function AdminRestaurants() {
                 )}
               </div>
             </div>
-            
+
             <div className="flex items-center justify-between py-2">
               <Label>Restaurant actif</Label>
               <Switch
@@ -588,7 +602,7 @@ export default function AdminRestaurants() {
                 onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
               />
             </div>
-            
+
             <div className="flex items-center justify-between py-2 border-t">
               <div>
                 <Label>Réservation en ligne</Label>
@@ -599,7 +613,7 @@ export default function AdminRestaurants() {
                 onCheckedChange={(checked) => setFormData({ ...formData, onlineBookingEnabled: checked })}
               />
             </div>
-            
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Annuler
@@ -611,7 +625,7 @@ export default function AdminRestaurants() {
           </form>
         </DialogContent>
       </Dialog>
-      
+
       {/* Delete Confirmation */}
       <AlertDialog open={!!deleteRestaurant} onOpenChange={() => setDeleteRestaurant(null)}>
         <AlertDialogContent>
