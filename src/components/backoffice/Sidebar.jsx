@@ -39,10 +39,12 @@ export default function Sidebar({ user, restaurant, isAdmin, isMobileOpen, setIs
   const restaurantId = urlParams.get('restaurantId');
 
   const createLinkUrl = (page) => {
-    if (!isAdmin || !restaurantId) {
-      return createPageUrl(page);
+    // Always persist restaurantId if it exists in the current URL
+    // This ensures admins navigating through "View as Restaurateur" mode don't lose context
+    if (restaurantId) {
+      return createPageUrl(`${page}?restaurantId=${restaurantId}`);
     }
-    return createPageUrl(`${page}?restaurantId=${restaurantId}`);
+    return createPageUrl(page);
   };
 
   return (

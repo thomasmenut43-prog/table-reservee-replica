@@ -25,7 +25,7 @@ export default function RestaurantCard({ restaurant }) {
           </div>
         </div>
       </Link>
-      <div className="p-4 pt-0">
+      <div className="p-4">
         <Link to={restaurantUrl}>
           <Button
             className="w-full rounded-3xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"

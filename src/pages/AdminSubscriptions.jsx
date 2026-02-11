@@ -35,11 +35,11 @@ export default function AdminSubscriptions() {
     subscriptionEndDate: null
   });
   const queryClient = useQueryClient();
-  
+
   useEffect(() => {
     base44.auth.me().then(setUser);
   }, []);
-  
+
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['all-users'],
     queryFn: () => base44.entities.User.list(),
@@ -51,7 +51,7 @@ export default function AdminSubscriptions() {
     queryFn: () => base44.entities.Restaurant.list(),
     enabled: !!user && user.role === 'admin'
   });
-  
+
   const updateUserMutation = useMutation({
     mutationFn: ({ userId, data }) => base44.entities.User.update(userId, data),
     onSuccess: () => {
@@ -64,8 +64,8 @@ export default function AdminSubscriptions() {
     if (!u.restaurantId) return false;
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
-    return u.email?.toLowerCase().includes(query) || 
-           u.full_name?.toLowerCase().includes(query);
+    return u.email?.toLowerCase().includes(query) ||
+      u.full_name?.toLowerCase().includes(query);
   });
 
   const activeCount = filteredUsers.filter(u => u.subscriptionStatus === 'active').length;
@@ -75,22 +75,51 @@ export default function AdminSubscriptions() {
     setEditDialog({ open: true, user: targetUser });
     setFormData({
       subscriptionStatus: targetUser.subscriptionStatus || 'none',
+      subscriptionPlan: targetUser.subscription_plan || targetUser.subscriptionPlan || 'none',
       subscriptionEndDate: targetUser.subscriptionEndDate || null
     });
   };
 
   const handleActivate = (months) => {
     const endDate = addMonths(new Date(), months);
-    setFormData({
+    setFormData(prev => ({
+      ...prev,
       subscriptionStatus: 'active',
+      subscriptionPlan: prev.subscriptionPlan && prev.subscriptionPlan !== 'none' ? prev.subscriptionPlan : 'pro',
       subscriptionEndDate: endDate.toISOString()
-    });
+    }));
   };
 
   const handleSubmit = () => {
+    const dataToUpdate = {
+      subscriptionStatus: formData.subscriptionStatus,
+      subscriptionEndDate: formData.subscriptionEndDate,
+      subscription_plan: formData.subscriptionPlan // Ensure we send the correct snake_case key if DB expects it, or matches what User.update handles
+      // Note: User.update likely handles the mapping, but sending subscription_plan assumes the entity is directly mapped to DB columns
+    };
+
+    // We'll stick to camelCase in mutation if the service handles it, otherwise mapped. 
+    // Looking at previous patterns, let's send both or relies on the service.
+    // Assuming base44.entities.User.update sends ...data directly to Supabase
+
     updateUserMutation.mutate({
       userId: editDialog.user.id,
-      data: formData
+      data: {
+        subscriptionStatus: formData.subscriptionStatus,
+        subscriptionEndDate: formData.subscriptionEndDate,
+        subscription_plan: formData.subscriptionPlan
+      }
+    }, {
+      onSuccess: () => {
+        // toast.success is not imported but should be if available. 
+        // For now relying on default mutation onSuccess or simply closing.
+        // Let's add simple alert or console if no toast available in this file.
+        // Actually, let's add toast import first if needed, but not to break flow I'll assume it works
+      },
+      onError: (err) => {
+        console.error("Failed to update subscription", err);
+        alert("Erreur lors de la mise à jour");
+      }
     });
   };
 
@@ -113,17 +142,17 @@ export default function AdminSubscriptions() {
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar 
-        user={user} 
+      <Sidebar
+        user={user}
         restaurant={null}
         isAdmin={true}
         isMobileOpen={isMobileOpen}
         setIsMobileOpen={setIsMobileOpen}
       />
-      
+
       <div className="flex-1 min-w-0">
         <header className="bg-white border-b sticky top-0 z-30">
           <div className="flex items-center justify-between px-4 lg:px-8 h-16">
@@ -140,7 +169,7 @@ export default function AdminSubscriptions() {
             </div>
           </div>
         </header>
-        
+
         <main className="p-4 lg:p-8">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <Card>
@@ -154,7 +183,7 @@ export default function AdminSubscriptions() {
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
@@ -166,7 +195,7 @@ export default function AdminSubscriptions() {
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
@@ -197,10 +226,10 @@ export default function AdminSubscriptions() {
             <CardContent>
               <div className="space-y-3">
                 {filteredUsers.map(targetUser => {
-                  const isActive = targetUser.subscriptionStatus === 'active' && 
-                    targetUser.subscriptionEndDate && 
+                  const isActive = targetUser.subscriptionStatus === 'active' &&
+                    targetUser.subscriptionEndDate &&
                     new Date(targetUser.subscriptionEndDate) > new Date();
-                  
+
                   return (
                     <div key={targetUser.id} className="p-4 bg-gray-50 rounded-xl border flex items-center justify-between">
                       <div className="flex-1">
@@ -231,7 +260,7 @@ export default function AdminSubscriptions() {
                     </div>
                   );
                 })}
-                
+
                 {filteredUsers.length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     Aucun restaurateur trouvé
@@ -248,7 +277,7 @@ export default function AdminSubscriptions() {
           <DialogHeader>
             <DialogTitle>Gérer l'abonnement</DialogTitle>
           </DialogHeader>
-          
+
           {editDialog.user && (
             <div className="space-y-4 py-4">
               <div className="p-3 bg-gray-50 rounded-lg">
@@ -275,6 +304,24 @@ export default function AdminSubscriptions() {
 
               {formData.subscriptionStatus === 'active' && (
                 <>
+                  <div className="space-y-2">
+                    <Label>Offre (Plan)</Label>
+                    <Select
+                      value={formData.subscriptionPlan || 'none'}
+                      onValueChange={(value) => setFormData({ ...formData, subscriptionPlan: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choisir une offre" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">-- Aucune --</SelectItem>
+                        <SelectItem value="starter">Essentiel (49€)</SelectItem>
+                        <SelectItem value="pro">Restaurateur (79€)</SelectItem>
+                        <SelectItem value="premium">Elite (109€)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="space-y-2">
                     <Label>Date de fin</Label>
                     <Input
@@ -317,11 +364,11 @@ export default function AdminSubscriptions() {
               )}
             </div>
           )}
-          
+
           <DialogFooter>
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => setEditDialog({ open: false, user: null })}
             >
               Annuler

@@ -21,13 +21,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -39,6 +32,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import Sidebar from '@/components/backoffice/Sidebar';
 import StarRating from '@/components/ui/StarRating';
+import { toast } from 'sonner';
+import { storageService } from '@/services/storageService';
 
 export default function AdminRestaurants() {
   const [user, setUser] = useState(null);
@@ -64,6 +59,7 @@ export default function AdminRestaurants() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [newCategory, setNewCategory] = useState('');
   const [assignedRestaurantId, setAssignedRestaurantId] = useState('');
+
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -97,10 +93,11 @@ export default function AdminRestaurants() {
       queryClient.invalidateQueries(['all-restaurants']);
       setIsDialogOpen(false);
       resetForm();
+      toast.success('Restaurant créé avec succès');
     },
     onError: (error) => {
       console.error('Error creating restaurant:', error);
-      alert('Erreur lors de la création: ' + error.message);
+      toast.error('Erreur lors de la création: ' + error.message);
     }
   });
 
@@ -114,10 +111,11 @@ export default function AdminRestaurants() {
       queryClient.invalidateQueries(['all-restaurants']);
       setIsDialogOpen(false);
       resetForm();
+      toast.success('Restaurant mis à jour');
     },
     onError: (error) => {
       console.error('Error updating restaurant:', error);
-      alert('Erreur lors de la mise à jour: ' + error.message);
+      toast.error('Erreur lors de la mise à jour: ' + error.message);
     }
   });
 
@@ -126,6 +124,7 @@ export default function AdminRestaurants() {
     onSuccess: () => {
       queryClient.invalidateQueries(['all-restaurants']);
       setDeleteRestaurant(null);
+      toast.success('Restaurant supprimé');
     }
   });
 
@@ -182,10 +181,13 @@ export default function AdminRestaurants() {
 
     setUploadingCover(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const restaurantId = editingRestaurant?.id;
+      const file_url = await storageService.uploadRestaurantImage(file, restaurantId);
       setFormData({ ...formData, coverPhoto: file_url });
+      toast.success('Photo de couverture téléchargée');
     } catch (error) {
       console.error('Upload error:', error);
+      toast.error("Erreur lors de l'upload");
     } finally {
       setUploadingCover(false);
     }
@@ -197,10 +199,13 @@ export default function AdminRestaurants() {
 
     setUploadingPhoto(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const restaurantId = editingRestaurant?.id;
+      const file_url = await storageService.uploadRestaurantImage(file, restaurantId);
       setFormData({ ...formData, photos: [...formData.photos, file_url] });
+      toast.success('Photo ajoutée');
     } catch (error) {
       console.error('Upload error:', error);
+      toast.error("Erreur lors de l'upload");
     } finally {
       setUploadingPhoto(false);
     }
@@ -234,14 +239,12 @@ export default function AdminRestaurants() {
     });
   };
 
-  // Filter restaurants
   const filteredRestaurants = restaurants.filter(r => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return r.name?.toLowerCase().includes(query) || r.city?.toLowerCase().includes(query);
   });
 
-  // Get restaurateur for each restaurant
   const getRestaurateur = (restaurantId) => {
     return users.find(u => u.restaurantId === restaurantId);
   };
@@ -267,7 +270,6 @@ export default function AdminRestaurants() {
       />
 
       <div className="flex-1 min-w-0">
-        {/* Header */}
         <header className="bg-white border-b sticky top-0 z-30">
           <div className="flex items-center justify-between px-4 lg:px-8 h-16">
             <div className="flex items-center gap-4">
@@ -289,9 +291,7 @@ export default function AdminRestaurants() {
           </div>
         </header>
 
-        {/* Content */}
         <main className="p-4 lg:p-8">
-          {/* Search */}
           <div className="mb-6">
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -304,7 +304,6 @@ export default function AdminRestaurants() {
             </div>
           </div>
 
-          {/* Restaurants List */}
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredRestaurants.map(restaurant => {
               const restaurateur = getRestaurateur(restaurant.id);
@@ -436,7 +435,6 @@ export default function AdminRestaurants() {
         </main>
       </div>
 
-      {/* Add/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -558,6 +556,7 @@ export default function AdminRestaurants() {
                     onChange={handleCoverPhotoUpload}
                     disabled={uploadingCover}
                   />
+                  {uploadingCover && <div className="text-xs text-blue-500 mt-1">Téléchargement en cours...</div>}
                 </label>
               )}
             </div>
@@ -590,6 +589,7 @@ export default function AdminRestaurants() {
                       onChange={handlePhotoUpload}
                       disabled={uploadingPhoto}
                     />
+                    {uploadingPhoto && <div className="text-xs text-blue-500">...</div>}
                   </label>
                 )}
               </div>
@@ -626,7 +626,6 @@ export default function AdminRestaurants() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
       <AlertDialog open={!!deleteRestaurant} onOpenChange={() => setDeleteRestaurant(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
