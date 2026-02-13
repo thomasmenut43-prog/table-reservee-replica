@@ -189,8 +189,8 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
     if (!selectedTool || !canvasRef.current || dragging || resizing) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = Math.max(0, (e.clientX - rect.left) / zoom);
-    const y = Math.max(0, (e.clientY - rect.top) / zoom);
+    const x = Math.round(Math.max(0, (e.clientX - rect.left) / zoom));
+    const y = Math.round(Math.max(0, (e.clientY - rect.top) / zoom));
 
     const objectSizes = {
       wall: { width: 200, height: 20 },
@@ -208,7 +208,8 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
       type: selectedTool,
       position_x: x,
       position_y: y,
-      ...size,
+      width: size.width,
+      height: size.height,
       rotation: 0,
       color: selectedTool === 'wall' ? '#6B7280' : selectedTool === 'plant' ? '#10B981' : '#8B5CF6'
     });

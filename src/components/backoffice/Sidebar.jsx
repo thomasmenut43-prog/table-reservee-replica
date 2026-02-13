@@ -4,7 +4,7 @@ import { createPageUrl } from '@/utils';
 import {
   LayoutDashboard, CalendarDays, UtensilsCrossed, Clock,
   Ban, Settings, ChevronRight, Building2, Users, BarChart3,
-  Menu, X, Home, CheckCircle2, FileText, TrendingUp
+  Menu, X, Home, CheckCircle2, FileText, TrendingUp, CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ const restaurateurLinks = [
   { name: 'Tables', page: 'BackofficeTables', icon: UtensilsCrossed },
   { name: 'Services & Horaires', page: 'BackofficeSchedules', icon: Clock },
   { name: 'Indisponibilités', page: 'BackofficeBlocks', icon: Ban },
+  { name: 'Offre', page: 'BackofficeSubscription', icon: CreditCard },
   { name: 'Paramètres', page: 'BackofficeSettings', icon: Settings }
 ];
 

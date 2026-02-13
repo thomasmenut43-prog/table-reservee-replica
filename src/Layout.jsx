@@ -42,9 +42,12 @@ function LayoutContent({ children, currentPageName }) {
   const [user, setUser] = useState(null);
   const [settings, setSettings] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup'
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [signupName, setSignupName] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [signupSuccess, setSignupSuccess] = useState(false);
   const { isDark, toggleTheme } = useTheme() || { isDark: false, toggleTheme: () => { } };
 
   const loadUser = async () => {
@@ -67,6 +70,7 @@ function LayoutContent({ children, currentPageName }) {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
+    setSignupSuccess(false);
     try {
       const loggedInUser = await base44.auth.login(loginEmail, loginPassword);
       setUser(loggedInUser);
@@ -76,6 +80,31 @@ function LayoutContent({ children, currentPageName }) {
     } catch (error) {
       setLoginError('Email ou mot de passe incorrect');
     }
+  };
+
+  const handleSignUp = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    setSignupSuccess(false);
+    try {
+      await base44.auth.signUp(loginEmail, loginPassword, {
+        full_name: signupName || undefined,
+        role: 'restaurateur'
+      });
+      setSignupSuccess(true);
+      setLoginError('');
+      setLoginEmail('');
+      setLoginPassword('');
+      setSignupName('');
+    } catch (error) {
+      setLoginError(error?.message || 'Erreur lors de l\'inscription');
+    }
+  };
+
+  const resetModalState = () => {
+    setAuthMode('login');
+    setLoginError('');
+    setSignupSuccess(false);
   };
 
   const handleLogout = () => {
@@ -97,12 +126,23 @@ function LayoutContent({ children, currentPageName }) {
   return (
     <div className="min-h-screen flex flex-col bg-white">
       {/* Login Modal */}
-      <Dialog open={showLoginModal} onOpenChange={setShowLoginModal}>
+      <Dialog open={showLoginModal} onOpenChange={(open) => { setShowLoginModal(open); if (!open) resetModalState(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Connexion</DialogTitle>
+            <DialogTitle>{authMode === 'signup' ? 'Créer un compte' : 'Connexion'}</DialogTitle>
           </DialogHeader>
+          {signupSuccess ? (
+            <div className="py-6 text-center space-y-4">
+              <p className="text-green-600 font-medium">Compte créé avec succès !</p>
+              <p className="text-sm text-gray-600">Vérifiez votre boîte mail pour confirmer votre adresse email, puis connectez-vous.</p>
+              <Button variant="outline" onClick={() => { setAuthMode('login'); setSignupSuccess(false); }}>
+                Aller à la connexion
+              </Button>
+            </div>
+          ) : (
           <div className="space-y-4">
+            {authMode === 'login' ? (
+            <>
             {/* Connexion via Google / Apple */}
             <div className="grid gap-2">
               <Button
@@ -183,7 +223,66 @@ function LayoutContent({ children, currentPageName }) {
                 Se connecter
               </Button>
             </form>
+            <p className="text-center text-sm text-gray-600">
+              Pas encore de compte ?{' '}
+              <button type="button" className="text-primary font-medium hover:underline" onClick={() => { setAuthMode('signup'); setLoginError(''); }}>
+                S'inscrire
+              </button>
+            </p>
+            </>
+            ) : (
+            <form onSubmit={handleSignUp} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="signup-name">Nom (optionnel)</Label>
+                <Input
+                  id="signup-name"
+                  type="text"
+                  placeholder="Votre nom ou nom du restaurant"
+                  value={signupName}
+                  onChange={(e) => setSignupName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-email">Email</Label>
+                <Input
+                  id="signup-email"
+                  type="email"
+                  placeholder="votre@email.fr"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-password">Mot de passe</Label>
+                <Input
+                  id="signup-password"
+                  type="password"
+                  placeholder="Minimum 6 caractères"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  minLength={6}
+                  required
+                />
+              </div>
+              {loginError && (
+                <p className="text-sm text-red-600">{loginError}</p>
+              )}
+              <Button type="submit" className="w-full">
+                Créer mon compte
+              </Button>
+            </form>
+            )}
+            {authMode === 'signup' && (
+            <p className="text-center text-sm text-gray-600">
+              Déjà un compte ?{' '}
+              <button type="button" className="text-primary font-medium hover:underline" onClick={() => { setAuthMode('login'); setLoginError(''); }}>
+                Se connecter
+              </button>
+            </p>
+            )}
           </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -220,7 +319,7 @@ function LayoutContent({ children, currentPageName }) {
                         <p className="text-xs text-gray-500">{user.email}</p>
                       </div>
                       <DropdownMenuSeparator />
-                      {(user.role === 'admin' || user.restaurantId) && (
+                      {(user.role === 'admin' || user.role === 'restaurateur' || user.restaurantId) && (
                         <>
                           <DropdownMenuItem onClick={() => window.location.href = createPageUrl('Backoffice')}>
                             <Settings className="h-4 w-4 mr-2" />
@@ -229,7 +328,7 @@ function LayoutContent({ children, currentPageName }) {
                           <DropdownMenuSeparator />
                         </>
                       )}
-                      {user.role !== 'admin' && !user.restaurantId && (
+                      {user.role === 'customer' && (
                         <>
                           <DropdownMenuItem onClick={() => window.location.href = createPageUrl('MyReservations')}>
                             <CalendarDays className="h-4 w-4 mr-2" />

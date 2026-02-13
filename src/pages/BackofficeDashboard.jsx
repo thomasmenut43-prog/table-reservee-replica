@@ -100,13 +100,19 @@ export default function BackofficeDashboard() {
   
   const { data: tables = [] } = useQuery({
     queryKey: ['tables', restaurantId, selectedFloorPlan],
-    queryFn: () => base44.entities.Table.filter({ restaurantId, floorPlanId: selectedFloorPlan }),
+    queryFn: async () => {
+      const all = await base44.entities.Table.filter({ restaurantId });
+      return all.filter(t => t.floorPlanId === selectedFloorPlan || t.floorPlanId == null);
+    },
     enabled: !!restaurantId && !!selectedFloorPlan
   });
 
   const { data: mapObjects = [] } = useQuery({
     queryKey: ['map-objects', restaurantId, selectedFloorPlan],
-    queryFn: () => base44.entities.MapObject.filter({ restaurantId, floorPlanId: selectedFloorPlan }),
+    queryFn: async () => {
+      const all = await base44.entities.MapObject.filter({ restaurantId });
+      return all.filter(o => o.floorPlanId === selectedFloorPlan || o.floorPlanId == null);
+    },
     enabled: !!restaurantId && !!selectedFloorPlan
   });
   

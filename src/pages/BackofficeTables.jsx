@@ -444,42 +444,48 @@ export default function BackofficeTables() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {isSubscribed && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        const currentPlan = floorPlans.find(p => p.id === selectedFloorPlan);
+                        setFloorPlanDialog({ open: true, plan: currentPlan });
+                        setFloorPlanName(currentPlan?.name || '');
+                      }}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </>
+              )}
+              {isSubscribed && (
+                <>
                   <Button
                     variant="outline"
-                    size="icon"
                     onClick={() => {
-                      const currentPlan = floorPlans.find(p => p.id === selectedFloorPlan);
-                      setFloorPlanDialog({ open: true, plan: currentPlan });
-                      setFloorPlanName(currentPlan?.name || '');
+                      setFloorPlanDialog({ open: true, plan: null });
+                      setFloorPlanName('');
                     }}
                   >
-                    <Edit2 className="h-4 w-4" />
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nouveau plan
+                  </Button>
+                  {(tables.length > 0 || mapObjects.length > 0) && (
+                    <Button
+                      variant="destructive"
+                      onClick={() => setClearDataDialog(true)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Réinitialiser
+                    </Button>
+                  )}
+                  <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Ajouter une table
                   </Button>
                 </>
               )}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setFloorPlanDialog({ open: true, plan: null });
-                  setFloorPlanName('');
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Nouveau plan
-              </Button>
-              {(tables.length > 0 || mapObjects.length > 0) && (
-                <Button
-                  variant="destructive"
-                  onClick={() => setClearDataDialog(true)}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Réinitialiser
-                </Button>
-              )}
-              <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter une table
-              </Button>
             </div>
           </div>
         </header>
@@ -504,10 +510,12 @@ export default function BackofficeTables() {
                 ) : (
                   <div className="text-center py-12 bg-gray-100 rounded-xl">
                     <p className="text-gray-600 mb-4">Aucun plan de table créé</p>
-                    <Button onClick={() => setFloorPlanDialog({ open: true, plan: null })}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Créer un plan
-                    </Button>
+                    {isSubscribed && (
+                      <Button onClick={() => setFloorPlanDialog({ open: true, plan: null })}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Créer un plan
+                      </Button>
+                    )}
                   </div>
                 )}
               </TabsContent>

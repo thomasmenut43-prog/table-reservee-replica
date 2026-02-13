@@ -381,6 +381,12 @@ const createMapObjectEntityService = () => {
     create: async (data) => {
       const supabaseData = toSupabase(data);
       if (!supabaseData.id) delete supabaseData.id;
+      // map_objects attend des INTEGER pour position_x, position_y, width, height, rotation
+      ['position_x', 'position_y', 'width', 'height', 'rotation'].forEach((k) => {
+        if (supabaseData[k] != null && typeof supabaseData[k] === 'number') {
+          supabaseData[k] = Math.round(supabaseData[k]);
+        }
+      });
       let result = await supabase.from(tableName).insert(supabaseData).select().single();
       if (result.error && isMapObjectsTableError(result.error)) {
         const items = getMapObjectsFromStorage();
@@ -396,8 +402,14 @@ const createMapObjectEntityService = () => {
       return fromSupabase(result.data, tableName);
     },
     update: async (id, data) => {
+      const toUpdate = { ...data };
+      ['position_x', 'position_y', 'positionX', 'positionY', 'width', 'height', 'rotation'].forEach((k) => {
+        if (toUpdate[k] != null && typeof toUpdate[k] === 'number') {
+          toUpdate[k] = Math.round(toUpdate[k]);
+        }
+      });
       try {
-        return await base.update(id, data);
+        return await base.update(id, toUpdate);
       } catch (err) {
         if (isMapObjectsTableError(err)) {
           const items = getMapObjectsFromStorage();
@@ -508,10 +520,10 @@ export const auth = {
     try {
       const session = await supabaseAuth.getSession();
       if (session?.user) {
-        // Get role from profiles table
+        // Get role and subscription from profiles table (source de vérité pour l'abonnement)
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role, restaurant_id, full_name')
+          .select('role, restaurant_id, full_name, subscription_status, subscription_end_date, subscription_plan')
           .eq('id', session.user.id)
           .single();
 
@@ -521,8 +533,9 @@ export const auth = {
           full_name: profile?.full_name || session.user.email.split('@')[0],
           role: profile?.role || getUserRole(session.user.email),
           restaurantId: profile?.restaurant_id || null,
-          subscriptionStatus: session.user.user_metadata?.subscriptionStatus || null,
-          subscriptionEndDate: session.user.user_metadata?.subscriptionEndDate || null
+          subscriptionStatus: profile?.subscription_status ?? session.user.user_metadata?.subscriptionStatus ?? null,
+          subscriptionEndDate: profile?.subscription_end_date ?? session.user.user_metadata?.subscriptionEndDate ?? null,
+          subscriptionPlan: profile?.subscription_plan ?? session.user.user_metadata?.subscriptionPlan ?? null
         };
       }
       return null;
@@ -535,10 +548,10 @@ export const auth = {
   login: async (email, password) => {
     const user = await supabaseAuth.signIn(email, password);
 
-    // Get role from profiles table
+    // Get role and subscription from profiles table (source de vérité)
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, restaurant_id, full_name')
+      .select('role, restaurant_id, full_name, subscription_status, subscription_end_date, subscription_plan')
       .eq('id', user.id)
       .single();
 
@@ -548,8 +561,9 @@ export const auth = {
       full_name: profile?.full_name || user.email.split('@')[0],
       role: profile?.role || getUserRole(email),
       restaurantId: profile?.restaurant_id || null,
-      subscriptionStatus: user.user_metadata?.subscriptionStatus || null,
-      subscriptionEndDate: user.user_metadata?.subscriptionEndDate || null
+      subscriptionStatus: profile?.subscription_status ?? user.user_metadata?.subscriptionStatus ?? null,
+      subscriptionEndDate: profile?.subscription_end_date ?? user.user_metadata?.subscriptionEndDate ?? null,
+      subscriptionPlan: profile?.subscription_plan ?? user.user_metadata?.subscriptionPlan ?? null
     };
     return auth.currentUser;
   },
@@ -568,6 +582,23 @@ export const auth = {
   /** Connexion via Apple (OAuth). Redirige vers Apple puis revient sur l'app. */
   loginWithApple: async () => {
     await supabaseAuth.signInWithOAuth('apple');
+  },
+
+  /** Inscription : crée un utilisateur auth + profil (via trigger DB) */
+  signUp: async (email, password, metadata = {}) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          ...metadata,
+          full_name: metadata.full_name || email.split('@')[0],
+          role: metadata.role || 'restaurateur'
+        }
+      }
+    });
+    if (error) throw error;
+    return data.user;
   },
 
   redirectToLogin: (returnUrl) => {

@@ -103,10 +103,10 @@ export default function DashboardTableMap({
                   key={obj.id}
                   className="absolute pointer-events-none"
                   style={{
-                    left: obj.position_x,
-                    top: obj.position_y,
-                    width: obj.width,
-                    height: obj.height,
+                    left: obj.position_x ?? obj.positionX ?? 0,
+                    top: obj.position_y ?? obj.positionY ?? 0,
+                    width: obj.width ?? 60,
+                    height: obj.height ?? 40,
                     transform: `rotate(${obj.rotation || 0}deg)`,
                     backgroundColor: obj.type === 'plant' ? 'transparent' : (obj.color || '#94a3b8'),
                     opacity: 1,
@@ -133,10 +133,10 @@ export default function DashboardTableMap({
                     key={table.id}
                     className={`absolute border-2 cursor-pointer transition-all hover:scale-105 ${getTableColor(table)}`}
                     style={{
-                      left: table.position_x,
-                      top: table.position_y,
-                      width: table.width || 80,
-                      height: table.height || 80,
+                      left: table.position_x ?? table.positionX ?? 0,
+                      top: table.position_y ?? table.positionY ?? 0,
+                      width: table.width ?? 80,
+                      height: table.height ?? 80,
                       transform: `rotate(${table.rotation || 0}deg)`,
                       borderRadius: table.shape === 'round' ? '50%' : '8px'
                     }}

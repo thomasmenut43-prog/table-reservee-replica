@@ -40,3 +40,7 @@ CREATE POLICY "Authenticated can modify map_objects" ON public.map_objects FOR A
 -- Colonnes pour table_blocks (début/fin avec heure)
 ALTER TABLE public.table_blocks ADD COLUMN IF NOT EXISTS start_datetime TIMESTAMPTZ;
 ALTER TABLE public.table_blocks ADD COLUMN IF NOT EXISTS end_datetime TIMESTAMPTZ;
+
+-- Colonnes abonnement pour profiles (assignation offre admin -> déblocage fonctionnalités)
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_status TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMPTZ;

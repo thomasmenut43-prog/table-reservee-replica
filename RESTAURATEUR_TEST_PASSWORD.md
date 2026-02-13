@@ -1,21 +1,40 @@
 # Mot de passe du restaurateur test
 
-Pour définir le mot de passe **Laguna05\*** pour le compte restaurateur test :
+## Utilisateur test
 
-## Via le tableau de bord Supabase
+- **Email** : `Tom.marcon@live.fr`
+- **Mot de passe** : `TestResto2025!`
 
-1. Ouvrir [Supabase Dashboard](https://supabase.com/dashboard) → votre projet.
-2. Aller dans **Authentication** → **Users**.
-3. Trouver l’utilisateur « restaurateur test » (par exemple `tom.marcon@live.fr` ou l’email du compte test).
-4. Cliquer sur les **3 points** (⋮) à droite de l’utilisateur.
-5. Choisir **Send password recovery** pour envoyer un lien de réinitialisation à l’email du compte,  
-   **ou** utiliser l’API / un script avec la clé **service_role** pour définir le mot de passe directement (voir ci‑dessous).
+## Définir le mot de passe (si le compte existe déjà)
 
-## Définir le mot de passe directement (script)
+### Option 1 : Script Node (recommandé)
 
-Si tu préfères définir le mot de passe sans email de récupération, tu peux exécuter une fois le script suivant (avec la clé **service_role** uniquement en local, jamais commitée) :
+1. Récupère ta clé **service_role** : Supabase Dashboard → Settings → API → `service_role` (secret)
+2. Ajoute-la dans un fichier `.env` à la racine (ne pas commiter) :
+   ```
+   SUPABASE_SERVICE_ROLE_KEY=eyJ...
+   ```
+3. Exécute :
+   ```bash
+   SUPABASE_SERVICE_ROLE_KEY=ta_cle node scripts/set-test-user-password.js
+   ```
+   Ou avec un email/mot de passe personnalisé :
+   ```bash
+   SUPABASE_SERVICE_ROLE_KEY=ta_cle node scripts/set-test-user-password.js Tom.marcon@live.fr MonMotDePasse123!
+   ```
 
-- Soit en utilisant la fonction **Update user** dans Supabase Dashboard → Authentication → Users → [user] → **Edit user** (certains projets proposent un champ mot de passe).
-- Soit en appelant l’API Admin Supabase depuis un script local qui lit la clé dans une variable d’environnement (ex. `SUPABASE_SERVICE_ROLE_KEY`).
+### Option 2 : Via le tableau de bord Supabase
 
-Mot de passe à utiliser pour le restaurateur test : **Laguna05\***
+1. Ouvrir [Supabase Dashboard](https://supabase.com/dashboard) → ton projet
+2. **Authentication** → **Users**
+3. Trouver l’utilisateur `Tom.marcon@live.fr` (ou créer le compte via l’app)
+4. Cliquer sur les **3 points** (⋮) → **Send password recovery** pour recevoir un lien de réinitialisation par email
+5. Ou utiliser **Edit user** si le projet permet de définir le mot de passe directement
+
+### Créer l’utilisateur s’il n’existe pas
+
+Si le compte n’existe pas encore, inscris-toi via l’app (page d’accueil → Connexion / Inscription) avec l’email `Tom.marcon@live.fr`, puis exécute le script pour définir le mot de passe.
+
+### Configurer l’utilisateur comme restaurateur (accès back-office)
+
+Si l’utilisateur voit « Mes réservations » au lieu du Back-office, exécute dans Supabase SQL Editor le script **`supabase_set_test_user_restaurateur.sql`**. Il définit le rôle `restaurateur` et assigne un restaurant au compte test.
