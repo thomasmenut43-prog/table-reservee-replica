@@ -30,10 +30,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
 import Sidebar from '@/components/backoffice/Sidebar';
 import StarRating from '@/components/ui/StarRating';
-import { toast } from 'sonner';
-import { storageService } from '@/services/storageService';
 
 export default function AdminRestaurants() {
   const [user, setUser] = useState(null);
@@ -96,8 +95,7 @@ export default function AdminRestaurants() {
       toast.success('Restaurant créé avec succès');
     },
     onError: (error) => {
-      console.error('Error creating restaurant:', error);
-      toast.error('Erreur lors de la création: ' + error.message);
+      toast.error(error?.message || 'Erreur lors de la création du restaurant');
     }
   });
 
@@ -114,8 +112,7 @@ export default function AdminRestaurants() {
       toast.success('Restaurant mis à jour');
     },
     onError: (error) => {
-      console.error('Error updating restaurant:', error);
-      toast.error('Erreur lors de la mise à jour: ' + error.message);
+      toast.error(error?.message || 'Erreur lors de l\'enregistrement du restaurant');
     }
   });
 
@@ -124,8 +121,8 @@ export default function AdminRestaurants() {
     onSuccess: () => {
       queryClient.invalidateQueries(['all-restaurants']);
       setDeleteRestaurant(null);
-      toast.success('Restaurant supprimé');
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de supprimer le restaurant')
   });
 
   const resetForm = () => {
@@ -181,8 +178,7 @@ export default function AdminRestaurants() {
 
     setUploadingCover(true);
     try {
-      const restaurantId = editingRestaurant?.id;
-      const file_url = await storageService.uploadRestaurantImage(file, restaurantId);
+      const { file_url } = await base44.integrations.Core.UploadFile({ file, folder: 'restaurants' });
       setFormData({ ...formData, coverPhoto: file_url });
       toast.success('Photo de couverture téléchargée');
     } catch (error) {
@@ -199,8 +195,7 @@ export default function AdminRestaurants() {
 
     setUploadingPhoto(true);
     try {
-      const restaurantId = editingRestaurant?.id;
-      const file_url = await storageService.uploadRestaurantImage(file, restaurantId);
+      const { file_url } = await base44.integrations.Core.UploadFile({ file, folder: 'restaurants' });
       setFormData({ ...formData, photos: [...formData.photos, file_url] });
       toast.success('Photo ajoutée');
     } catch (error) {
@@ -371,7 +366,7 @@ export default function AdminRestaurants() {
 
                     <div className="flex flex-wrap items-center gap-2 pt-3 border-t">
                       {assignedRestaurantId === restaurant.id ? (
-                        <Link to={createPageUrl('BackofficeDashboard')}>
+                        <Link to={createPageUrl('BackofficeDashboard') + `?restaurantId=${restaurant.id}`}>
                           <Button variant="default" size="sm">
                             <Settings className="h-4 w-4 mr-1" />
                             Back-office

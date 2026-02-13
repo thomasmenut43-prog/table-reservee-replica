@@ -56,6 +56,9 @@ export default function AdminLegal() {
     onSuccess: () => {
       queryClient.invalidateQueries(['legal-contents']);
       toast.success('Contenu sauvegardé');
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Erreur lors de la sauvegarde');
     }
   });
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useTheme } from '@/components/ThemeProvider';
@@ -44,15 +45,26 @@ export default function BackofficeDashboard() {
   const [calendarDialog, setCalendarDialog] = useState({ open: false, table: null });
   const [selectedFloorPlan, setSelectedFloorPlan] = useState(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { isDark } = useTheme() || { isDark: false };
   
   // Get restaurantId from URL parameter or user data
-  const urlParams = new URLSearchParams(window.location.search);
+  const urlParams = new URLSearchParams(location.search);
   const restaurantIdFromUrl = urlParams.get('restaurantId');
   
   useEffect(() => {
     base44.auth.me().then(setUser);
   }, []);
+
+  // Mettre restaurantId dans l’URL dès que l’utilisateur est chargé pour garder le contexte entre onglets
+  useEffect(() => {
+    if (!user?.restaurantId || restaurantIdFromUrl) return;
+    const next = `${location.pathname}?restaurantId=${user.restaurantId}`;
+    if (location.search !== `?restaurantId=${user.restaurantId}`) {
+      navigate(next, { replace: true });
+    }
+  }, [user?.restaurantId, restaurantIdFromUrl, location.pathname, location.search, navigate]);
   
   const restaurantId = restaurantIdFromUrl || user?.restaurantId;
   

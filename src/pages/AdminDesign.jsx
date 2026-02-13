@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import Sidebar from '@/components/backoffice/Sidebar';
 import { toast } from 'sonner';
-import { storageService } from '@/services/storageService';
+import { compressImage } from '@/components/utils/imageCompression';
 
 export default function AdminDesign() {
   const [user, setUser] = useState(null);
@@ -65,7 +65,8 @@ export default function AdminDesign() {
     onSuccess: () => {
       queryClient.invalidateQueries(['platform-settings']);
       toast.success('Paramètres enregistrés avec succès');
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible d\'enregistrer les paramètres')
   });
 
   const handleUploadLogo = async (e) => {
@@ -74,8 +75,9 @@ export default function AdminDesign() {
 
     setIsUploading(true);
     try {
-      const file_url = await storageService.uploadLogo(file);
-      setFormData({ ...formData, logoUrl: file_url });
+      const compressedFile = await compressImage(file);
+      const result = await base44.integrations.Core.UploadFile({ file: compressedFile, folder: 'design' });
+      setFormData({ ...formData, logoUrl: result.file_url });
       toast.success('Logo téléchargé avec succès');
     } catch (error) {
       console.error(error);
@@ -279,8 +281,9 @@ export default function AdminDesign() {
                         if (!file) return;
                         setIsUploading(true);
                         try {
-                          const file_url = await storageService.uploadAppImage(file);
-                          setFormData({ ...formData, bannerAdUrl: file_url });
+                          const compressedFile = await compressImage(file);
+                          const result = await base44.integrations.Core.UploadFile({ file: compressedFile, folder: 'design' });
+                          setFormData({ ...formData, bannerAdUrl: result.file_url });
                           toast.success('Bannière téléchargée avec succès');
                         } catch (error) {
                           console.error(error);

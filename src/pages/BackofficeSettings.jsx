@@ -22,7 +22,6 @@ import { toast } from 'sonner';
 import Sidebar from '@/components/backoffice/Sidebar';
 import SubscriptionGuard from '@/components/backoffice/SubscriptionGuard';
 import { compressImage } from '@/components/utils/imageCompression';
-import { storageService } from '@/services/storageService';
 
 const CUISINE_TAGS = [
   'Français', 'Italien', 'Japonais', 'Chinois', 'Indien',
@@ -68,6 +67,9 @@ export default function BackofficeSettings() {
       queryClient.invalidateQueries(['my-restaurant', restaurantId]);
       setHasChanges(false);
       toast.success('Paramètres enregistrés');
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Erreur lors de l\'enregistrement');
     }
   });
 
@@ -90,7 +92,8 @@ export default function BackofficeSettings() {
 
     setUploading(true);
     try {
-      const file_url = await storageService.uploadRestaurantImage(file, restaurant.id);
+      const compressedFile = await compressImage(file);
+      const { file_url } = await base44.integrations.Core.UploadFile({ file: compressedFile, folder: 'restaurants' });
       handleChange('coverPhoto', file_url);
       toast.success('Bannière mise à jour');
     } catch (error) {
@@ -113,7 +116,8 @@ export default function BackofficeSettings() {
 
     setUploading(true);
     try {
-      const file_url = await storageService.uploadRestaurantImage(file, restaurant.id);
+      const compressedFile = await compressImage(file);
+      const { file_url } = await base44.integrations.Core.UploadFile({ file: compressedFile, folder: 'restaurants' });
       handleChange('photos', [...currentPhotos, file_url]);
       toast.success('Photo ajoutée');
     } catch (error) {

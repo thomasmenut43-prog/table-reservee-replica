@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from 'sonner';
 import Sidebar from '@/components/backoffice/Sidebar';
 import ReservationRow from '@/components/backoffice/ReservationRow';
 import SubscriptionGuard from '@/components/backoffice/SubscriptionGuard';
@@ -35,6 +36,12 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+
+// Créneaux horaires par service (tranches de 30 min)
+const MIDI_SLOTS = ['12:00', '12:30', '13:00', '13:30', '14:00'];
+const SOIR_SLOTS = ['19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00'];
+const getTimeSlotsForService = (serviceType) =>
+  serviceType === 'SOIR' ? SOIR_SLOTS : MIDI_SLOTS;
 
 export default function BackofficeReservations() {
   const [user, setUser] = useState(null);
@@ -94,14 +101,16 @@ export default function BackofficeReservations() {
     mutationFn: ({ id, data }) => base44.entities.Reservation.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries(['reservations', restaurantId]);
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible d\'enregistrer la réservation')
   });
   
   const deleteReservation = useMutation({
     mutationFn: (id) => base44.entities.Reservation.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries(['reservations', restaurantId]);
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de supprimer')
   });
 
   const createReservation = useMutation({
@@ -145,7 +154,8 @@ export default function BackofficeReservations() {
         status: 'confirmed',
         tableIds: []
       });
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de créer la réservation')
   });
   
   const handleTableChange = async (reservationId, newTableIds) => {
@@ -490,13 +500,21 @@ export default function BackofficeReservations() {
               </div>
               <div>
                 <Label htmlFor="time">Heure *</Label>
-                <Input
-                  id="time"
-                  type="time"
+                <Select
                   value={newReservation.time}
-                  onChange={(e) => setNewReservation({...newReservation, time: e.target.value})}
-                  required
-                />
+                  onValueChange={(value) => setNewReservation({ ...newReservation, time: value })}
+                >
+                  <SelectTrigger id="time">
+                    <SelectValue placeholder="Choisir l'heure" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getTimeSlotsForService(newReservation.serviceType).map((slot) => (
+                      <SelectItem key={slot} value={slot}>
+                        {slot}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -507,7 +525,11 @@ export default function BackofficeReservations() {
                 <Button
                   type="button"
                   variant={newReservation.serviceType === 'MIDI' ? 'default' : 'outline'}
-                  onClick={() => setNewReservation({...newReservation, serviceType: 'MIDI'})}
+                  onClick={() => {
+                    const slots = MIDI_SLOTS;
+                    const time = slots.includes(newReservation.time) ? newReservation.time : slots[0];
+                    setNewReservation({ ...newReservation, serviceType: 'MIDI', time });
+                  }}
                   className="justify-start"
                 >
                   <Sun className="h-4 w-4 mr-2" />
@@ -516,7 +538,11 @@ export default function BackofficeReservations() {
                 <Button
                   type="button"
                   variant={newReservation.serviceType === 'SOIR' ? 'default' : 'outline'}
-                  onClick={() => setNewReservation({...newReservation, serviceType: 'SOIR'})}
+                  onClick={() => {
+                    const slots = SOIR_SLOTS;
+                    const time = slots.includes(newReservation.time) ? newReservation.time : slots[0];
+                    setNewReservation({ ...newReservation, serviceType: 'SOIR', time });
+                  }}
                   className="justify-start"
                 >
                   <Moon className="h-4 w-4 mr-2" />

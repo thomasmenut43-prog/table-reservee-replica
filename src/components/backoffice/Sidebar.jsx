@@ -36,15 +36,15 @@ export default function Sidebar({ user, restaurant, isAdmin, isMobileOpen, setIs
   const links = isAdmin ? adminLinks : restaurateurLinks;
 
   const urlParams = new URLSearchParams(window.location.search);
-  const restaurantId = urlParams.get('restaurantId');
+  const restaurantIdFromUrl = urlParams.get('restaurantId');
+  // Garder le restaurant dans l’URL pour tous les onglets (admin + restaurateur)
+  const restaurantId = restaurantIdFromUrl || restaurant?.id;
 
   const createLinkUrl = (page) => {
-    // Always persist restaurantId if it exists in the current URL
-    // This ensures admins navigating through "View as Restaurateur" mode don't lose context
-    if (restaurantId) {
-      return createPageUrl(`${page}?restaurantId=${restaurantId}`);
+    if (!restaurantId) {
+      return createPageUrl(page);
     }
-    return createPageUrl(page);
+    return createPageUrl(page) + `?restaurantId=${restaurantId}`;
   };
 
   return (

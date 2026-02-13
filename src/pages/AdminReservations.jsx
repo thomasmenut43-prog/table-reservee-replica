@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from 'sonner';
 import Sidebar from '@/components/backoffice/Sidebar';
 import ReservationRow from '@/components/backoffice/ReservationRow';
 
@@ -61,7 +62,8 @@ export default function AdminReservations() {
     mutationFn: ({ id, data }) => base44.entities.Reservation.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries(['all-reservations']);
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible d\'enregistrer la réservation')
   });
   
   const handleStatusChange = async (id, newStatus) => {

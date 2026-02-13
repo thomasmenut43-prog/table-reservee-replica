@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from 'sonner';
 import Sidebar from '@/components/backoffice/Sidebar';
 
 export default function AdminSubscriptions() {
@@ -57,6 +58,11 @@ export default function AdminSubscriptions() {
     onSuccess: () => {
       queryClient.invalidateQueries(['all-users']);
       setEditDialog({ open: false, user: null });
+      toast.success('Abonnement enregistré');
+    },
+    onError: (err) => {
+      console.error('Erreur enregistrement abonnement:', err);
+      toast.error(err?.message || 'Impossible d\'enregistrer l\'abonnement');
     }
   });
 

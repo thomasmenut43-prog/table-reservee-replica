@@ -133,10 +133,15 @@ export default function BackofficeSchedules() {
       }
     });
     
-    await Promise.all(promises);
-    queryClient.invalidateQueries(['schedules', restaurantId]);
-    setHasChanges(false);
-    toast.success('Horaires enregistrés');
+    try {
+      await Promise.all(promises);
+      queryClient.invalidateQueries(['schedules', restaurantId]);
+      setHasChanges(false);
+      toast.success('Horaires enregistrés');
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.message || 'Erreur lors de l\'enregistrement des horaires');
+    }
   };
   
   if (!user) {

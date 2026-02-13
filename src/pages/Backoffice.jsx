@@ -27,7 +27,7 @@ export default function Backoffice() {
         if (currentUser.role === 'admin') {
           window.location.href = createPageUrl('AdminDashboard');
         } else if (currentUser.restaurantId) {
-          window.location.href = createPageUrl('BackofficeDashboard');
+          window.location.href = createPageUrl('BackofficeDashboard') + `?restaurantId=${currentUser.restaurantId}`;
         } else {
           setLoading(false);
         }

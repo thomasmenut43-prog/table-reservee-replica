@@ -43,7 +43,11 @@ const fieldNameMap = {
   updated_date: 'updated_at',
   // Table fields
   restaurantId: 'restaurant_id',
+  floorPlanId: 'floor_plan_id',
   isJoinable: 'is_joinable',
+  isActive: 'is_active',
+  // FloorPlan fields
+  isDefault: 'is_default',
   position_x: 'position_x',
   position_y: 'position_y',
   // Schedule fields
@@ -71,7 +75,16 @@ const fieldNameMap = {
   bannerAdLink: 'banner_ad_link',
   // Profile fields
   full_name: 'full_name',
-  is_disabled: 'is_disabled'
+  is_disabled: 'is_disabled',
+  subscriptionStatus: 'subscription_status',
+  subscriptionEndDate: 'subscription_end_date',
+  // TableBlock fields
+  tableId: 'table_id',
+  startDateTime: 'start_datetime',
+  endDateTime: 'end_datetime',
+  // MapObject fields
+  positionX: 'position_x',
+  positionY: 'position_y'
 };
 
 // Convert JS object to Supabase format
@@ -85,7 +98,7 @@ const toSupabase = (data) => {
 };
 
 // Convert Supabase object to JS format
-const fromSupabase = (data) => {
+const fromSupabase = (data, tableName = null) => {
   if (!data) return null;
   const result = {};
   const reverseMap = Object.fromEntries(
@@ -94,6 +107,10 @@ const fromSupabase = (data) => {
   for (const [key, value] of Object.entries(data)) {
     const newKey = reverseMap[key] || key;
     result[newKey] = value;
+  }
+  if (tableName === 'table_blocks') {
+    if (result.start_date && !result.startDateTime) result.startDateTime = `${result.start_date}T00:00:00.000Z`;
+    if (result.end_date && !result.endDateTime) result.endDateTime = `${result.end_date}T23:59:59.999Z`;
   }
   return result;
 };
@@ -149,7 +166,7 @@ const createSupabaseEntityService = (entityName) => {
         console.error(`Error listing ${tableName}:`, error);
         return [];
       }
-      return (data || []).map(fromSupabase);
+      return (data || []).map(d => fromSupabase(d, tableName));
     },
 
     // Filter items by criteria
@@ -180,7 +197,7 @@ const createSupabaseEntityService = (entityName) => {
         console.error(`Error filtering ${tableName}:`, error);
         return [];
       }
-      return (data || []).map(fromSupabase);
+      return (data || []).map(d => fromSupabase(d, tableName));
     },
 
     // Get single item by ID
@@ -195,34 +212,70 @@ const createSupabaseEntityService = (entityName) => {
         console.error(`Error getting ${tableName}:`, error);
         return null;
       }
-      return fromSupabase(data);
+      return fromSupabase(data, tableName);
     },
 
     // Create new item
     create: async (data) => {
-      const supabaseData = toSupabase(data);
+      let supabaseData = toSupabase(data);
       // Remove id if not provided (let Supabase generate it)
       if (!supabaseData.id) {
         delete supabaseData.id;
       }
+      // floor_plans: n'envoyer que les colonnes de base (compatibilité si is_default absent)
+      if (tableName === 'floor_plans') {
+        supabaseData = {
+          restaurant_id: supabaseData.restaurant_id,
+          name: supabaseData.name ?? 'Plan'
+        };
+      }
 
-      const { data: created, error } = await supabase
+      let result = await supabase
         .from(tableName)
         .insert(supabaseData)
         .select()
         .single();
 
-      if (error) {
-        console.error(`Error creating ${tableName}:`, error);
-        throw error;
+      // tables: si erreur schema (ex. colonne floor_plan_id absente), réessayer avec colonnes de base uniquement
+      if (tableName === 'tables' && result.error && (result.error.message?.includes('floor_plan_id') || result.error.message?.includes('schema cache'))) {
+        const minimal = {
+          restaurant_id: supabaseData.restaurant_id,
+          name: supabaseData.name ?? 'Table',
+          seats: supabaseData.seats ?? 2,
+          zone: supabaseData.zone ?? 'main',
+          is_joinable: supabaseData.is_joinable ?? false,
+          position_x: supabaseData.position_x ?? 0,
+          position_y: supabaseData.position_y ?? 0
+        };
+        result = await supabase.from(tableName).insert(minimal).select().single();
       }
-      return fromSupabase(created);
+
+      // table_blocks: si start_datetime/end_datetime absents, envoyer start_date/end_date (date seule)
+      if (tableName === 'table_blocks' && result.error && (result.error.message?.includes('start_datetime') || result.error.message?.includes('schema cache'))) {
+        const legacy = {
+          restaurant_id: supabaseData.restaurant_id,
+          table_id: supabaseData.table_id,
+          start_date: data.startDateTime ? String(data.startDateTime).slice(0, 10) : null,
+          end_date: data.endDateTime ? String(data.endDateTime).slice(0, 10) : null,
+          reason: supabaseData.reason ?? null
+        };
+        result = await supabase.from(tableName).insert(legacy).select().single();
+      }
+
+      if (result.error) {
+        console.error(`Error creating ${tableName}:`, result.error);
+        throw result.error;
+      }
+      return fromSupabase(result.data, tableName);
     },
 
     // Update item
     update: async (id, data) => {
       const supabaseData = toSupabase(data);
-      supabaseData.updated_at = new Date().toISOString();
+      const noUpdatedAt = ['tables', 'map_objects', 'table_blocks', 'floor_plans', 'service_schedules', 'reviews'];
+      if (!noUpdatedAt.includes(tableName)) {
+        supabaseData.updated_at = new Date().toISOString();
+      }
 
       const { data: updated, error } = await supabase
         .from(tableName)
@@ -235,7 +288,7 @@ const createSupabaseEntityService = (entityName) => {
         console.error(`Error updating ${tableName}:`, error);
         throw error;
       }
-      return fromSupabase(updated);
+      return fromSupabase(updated, tableName);
     },
 
     // Delete item
@@ -254,6 +307,123 @@ const createSupabaseEntityService = (entityName) => {
   };
 
   return service;
+};
+
+// MapObject: fallback localStorage si la table Supabase map_objects n'existe pas
+const MAP_OBJECTS_STORAGE_KEY = 'table_reservee_MapObject';
+const isMapObjectsTableError = (err) =>
+  err?.message?.includes('schema cache') || err?.message?.includes('map_objects');
+
+const getMapObjectsFromStorage = () => {
+  try {
+    const raw = localStorage.getItem(MAP_OBJECTS_STORAGE_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+};
+
+const setMapObjectsInStorage = (items) => {
+  localStorage.setItem(MAP_OBJECTS_STORAGE_KEY, JSON.stringify(items));
+};
+
+const createMapObjectEntityService = () => {
+  const tableName = 'map_objects';
+  const base = createSupabaseEntityService('MapObject');
+
+  return {
+    subscribe: base.subscribe,
+    list: async (sortBy, limit) => {
+      const { data, error } = await supabase.from(tableName).select('*');
+      if (error && isMapObjectsTableError(error)) return getMapObjectsFromStorage();
+      if (error) {
+        console.error(`Error listing ${tableName}:`, error);
+        return [];
+      }
+      return (data || []).map(d => fromSupabase(d, tableName));
+    },
+    filter: async (criteria = {}, sortBy, limit) => {
+      let query = supabase.from(tableName).select('*');
+      for (const [key, value] of Object.entries(criteria)) {
+        if (value !== undefined && value !== null) {
+          const mappedKey = fieldNameMap[key] || key;
+          query = query.eq(mappedKey, value);
+        }
+      }
+      const { data, error } = await query;
+      if (error && isMapObjectsTableError(error)) {
+        let items = getMapObjectsFromStorage();
+        for (const [key, value] of Object.entries(criteria)) {
+          if (value !== undefined && value !== null) {
+            items = items.filter(item => item[fieldNameMap[key] || key] === value || item[key] === value);
+          }
+        }
+        return items;
+      }
+      if (error) {
+        console.error(`Error filtering ${tableName}:`, error);
+        return [];
+      }
+      return (data || []).map(d => fromSupabase(d, tableName));
+    },
+    get: async (id) => {
+      try {
+        return await base.get(id);
+      } catch (err) {
+        if (isMapObjectsTableError(err)) {
+          const items = getMapObjectsFromStorage();
+          return items.find(item => item.id === id) || null;
+        }
+        throw err;
+      }
+    },
+    create: async (data) => {
+      const supabaseData = toSupabase(data);
+      if (!supabaseData.id) delete supabaseData.id;
+      let result = await supabase.from(tableName).insert(supabaseData).select().single();
+      if (result.error && isMapObjectsTableError(result.error)) {
+        const items = getMapObjectsFromStorage();
+        const newItem = {
+          ...data,
+          id: data.id || `obj_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+        };
+        items.push(newItem);
+        setMapObjectsInStorage(items);
+        return fromSupabase(newItem, tableName);
+      }
+      if (result.error) throw result.error;
+      return fromSupabase(result.data, tableName);
+    },
+    update: async (id, data) => {
+      try {
+        return await base.update(id, data);
+      } catch (err) {
+        if (isMapObjectsTableError(err)) {
+          const items = getMapObjectsFromStorage();
+          const idx = items.findIndex(item => item.id === id);
+          if (idx === -1) throw new Error(`Item ${id} not found`);
+          const updated = { ...items[idx], ...toSupabase(data) };
+          items[idx] = updated;
+          setMapObjectsInStorage(items);
+          return fromSupabase(updated, tableName);
+        }
+        throw err;
+      }
+    },
+    delete: async (id) => {
+      try {
+        return await base.delete(id);
+      } catch (err) {
+        if (isMapObjectsTableError(err)) {
+          const items = getMapObjectsFromStorage().filter(item => item.id !== id);
+          setMapObjectsInStorage(items);
+          return true;
+        }
+        throw err;
+      }
+    }
+  };
 };
 
 // Fallback localStorage service for unmapped entities
@@ -314,7 +484,7 @@ export const entities = {
   Reservation: createSupabaseEntityService('Reservation'),
   Table: createSupabaseEntityService('Table'),
   FloorPlan: createSupabaseEntityService('FloorPlan'),
-  MapObject: createLocalStorageEntityService('MapObject'), // Keep in localStorage
+  MapObject: createMapObjectEntityService(),
   ServiceSchedule: createSupabaseEntityService('ServiceSchedule'),
   TableBlock: createSupabaseEntityService('TableBlock'),
   Review: createSupabaseEntityService('Review'),
@@ -322,7 +492,8 @@ export const entities = {
   Subscription: createLocalStorageEntityService('Subscription'),
   AuditLog: createLocalStorageEntityService('AuditLog'),
   User: createSupabaseEntityService('User'),
-  WaitlistRequest: createLocalStorageEntityService('WaitlistRequest')
+  WaitlistRequest: createLocalStorageEntityService('WaitlistRequest'),
+  LegalContent: createLocalStorageEntityService('LegalContent')
 };
 
 // Auth service - Using Supabase Auth

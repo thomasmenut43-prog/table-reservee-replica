@@ -107,13 +107,19 @@ export default function BackofficeTables() {
 
   const { data: tables = [], isLoading } = useQuery({
     queryKey: ['tables', restaurantId, selectedFloorPlan],
-    queryFn: () => base44.entities.Table.filter({ restaurantId, floorPlanId: selectedFloorPlan }),
+    queryFn: async () => {
+      const all = await base44.entities.Table.filter({ restaurantId });
+      return all.filter(t => t.floorPlanId === selectedFloorPlan || t.floorPlanId == null);
+    },
     enabled: !!restaurantId && !!selectedFloorPlan
   });
 
   const { data: mapObjects = [] } = useQuery({
     queryKey: ['map-objects', restaurantId, selectedFloorPlan],
-    queryFn: () => base44.entities.MapObject.filter({ restaurantId, floorPlanId: selectedFloorPlan }),
+    queryFn: async () => {
+      const all = await base44.entities.MapObject.filter({ restaurantId });
+      return all.filter(o => o.floorPlanId === selectedFloorPlan || o.floorPlanId == null);
+    },
     enabled: !!restaurantId && !!selectedFloorPlan
   });
 
@@ -149,11 +155,10 @@ export default function BackofficeTables() {
       setSelectedFloorPlan(newPlan.id);
       setFloorPlanDialog({ open: false, plan: null });
       setFloorPlanName('');
-      toast.success('Plan de salle créé');
+      toast.success('Plan de table créé');
     },
-    onError: (error) => {
-      console.error('Error creating floor plan:', error);
-      toast.error("Erreur lors de la création du plan: " + error.message);
+    onError: (err) => {
+      toast.error(err?.message || 'Impossible de créer le plan de table');
     }
   });
 
@@ -163,6 +168,10 @@ export default function BackofficeTables() {
       queryClient.invalidateQueries(['floor-plans', restaurantId]);
       setFloorPlanDialog({ open: false, plan: null });
       setFloorPlanName('');
+      toast.success('Plan enregistré');
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Impossible d\'enregistrer le plan');
     }
   });
 
@@ -172,7 +181,8 @@ export default function BackofficeTables() {
       queryClient.invalidateQueries(['floor-plans', restaurantId]);
       setSelectedFloorPlan(floorPlans.find(p => p.id !== floorPlanDialog.plan?.id)?.id || null);
       setFloorPlanDialog({ open: false, plan: null });
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de supprimer le plan')
   });
 
   const createTable = useMutation({
@@ -186,22 +196,22 @@ export default function BackofficeTables() {
         shape: tableShape === 'round' ? 'round' : 'square',
         zone: zone,
         isJoinable: isJoinable,
+        isActive: isActive !== false,
         status: 'available',
-        position_x: data.x || Math.floor(Math.random() * 20) * 20,
-        position_y: data.y || Math.floor(Math.random() * 15) * 20,
-        width: width * 20,
-        height: height * 20
+        position_x: data.x ?? Math.floor(Math.random() * 20) * 20,
+        position_y: data.y ?? Math.floor(Math.random() * 15) * 20,
+        width: (width ?? 3) * 20,
+        height: (height ?? 2) * 20
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['tables', restaurantId, selectedFloorPlan]);
       setIsDialogOpen(false);
       resetForm();
-      toast.success('Table créée');
+      toast.success('Table ajoutée');
     },
-    onError: (error) => {
-      console.error('Error creating table:', error);
-      toast.error("Erreur lors de la création de la table: " + error.message);
+    onError: (err) => {
+      toast.error(err?.message || 'Impossible d\'ajouter la table');
     }
   });
 
@@ -222,12 +232,9 @@ export default function BackofficeTables() {
       queryClient.invalidateQueries(['tables', restaurantId, selectedFloorPlan]);
       setIsDialogOpen(false);
       resetForm();
-      toast.success('Table mise à jour');
+      toast.success('Table enregistrée');
     },
-    onError: (error) => {
-      console.error('Error updating table:', error);
-      toast.error("Erreur lors de la modification: " + error.message);
-    }
+    onError: (err) => toast.error(err?.message || 'Impossible d\'enregistrer la table')
   });
 
   const removeTable = useMutation({
@@ -235,12 +242,8 @@ export default function BackofficeTables() {
     onSuccess: () => {
       queryClient.invalidateQueries(['tables', restaurantId, selectedFloorPlan]);
       setDeleteTable(null);
-      toast.success('Table supprimée');
     },
-    onError: (error) => {
-      console.error('Error deleting table:', error);
-      toast.error("Erreur lors de la suppression: " + error.message);
-    }
+    onError: (err) => toast.error(err?.message || 'Impossible de supprimer')
   });
 
   const blockTable = useMutation({
@@ -274,27 +277,29 @@ export default function BackofficeTables() {
       setBlockDialog({ open: false, table: null });
       setBlockService('MIDI');
       setBlockSoirService(1);
-    }
+      toast.success('Table bloquée');
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de bloquer la table')
   });
 
   const unblockTable = useMutation({
     mutationFn: (blockId) => base44.entities.TableBlock.delete(blockId),
     onSuccess: () => {
       queryClient.invalidateQueries(['current-blocks', restaurantId]);
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de débloquer')
   });
 
   const clearAllData = useMutation({
     mutationFn: async () => {
-      // Delete all tables
       await Promise.all(tables.map(t => base44.entities.Table.delete(t.id)));
-      // Delete all map objects
       await Promise.all(mapObjects.map(o => base44.entities.MapObject.delete(o.id)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['tables', restaurantId, selectedFloorPlan]);
       queryClient.invalidateQueries(['map-objects', restaurantId, selectedFloorPlan]);
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Erreur lors de la réinitialisation')
   });
 
   const resetForm = () => {
