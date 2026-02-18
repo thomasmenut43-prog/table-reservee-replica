@@ -24,7 +24,6 @@ const adminLinks = [
   { name: 'Vue d\'ensemble', page: 'AdminDashboard', icon: BarChart3 },
   { name: 'Restaurants', page: 'AdminRestaurants', icon: Building2 },
   { name: 'Utilisateurs', page: 'AdminUsers', icon: Users },
-  { name: 'Offres', page: 'AdminSubscriptions', icon: CalendarDays },
   { name: 'Réservations', page: 'AdminReservations', icon: CalendarDays },
   { name: 'Design', page: 'AdminDesign', icon: Settings },
   { name: 'Pages Légales', page: 'AdminLegal', icon: FileText }

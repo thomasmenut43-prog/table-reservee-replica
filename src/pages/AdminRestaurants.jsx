@@ -3,9 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+import { format, addMonths } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import {
   Menu, Plus, Search, Building2, MapPin, Phone, Edit2,
-  Trash2, Power, ExternalLink, Eye, X, Tag, Upload, Image as ImageIcon, Settings
+  Trash2, Power, ExternalLink, Eye, X, Tag, Upload, Image as ImageIcon, Settings, CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +22,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,6 +67,11 @@ export default function AdminRestaurants() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [newCategory, setNewCategory] = useState('');
   const [assignedRestaurantId, setAssignedRestaurantId] = useState('');
+  const [offerDialog, setOfferDialog] = useState({ open: false, restaurant: null });
+  const [offerFormData, setOfferFormData] = useState({
+    subscriptionPlan: 'pro',
+    subscriptionEndDate: format(addMonths(new Date(), 12), 'yyyy-MM-dd')
+  });
 
   const queryClient = useQueryClient();
 
@@ -123,6 +137,53 @@ export default function AdminRestaurants() {
       setDeleteRestaurant(null);
     },
     onError: (err) => toast.error(err?.message || 'Impossible de supprimer le restaurant')
+  });
+
+  const getUsersForRestaurant = (restaurantId) => {
+    return users.filter(u => (u.restaurantId || u.restaurant_id) === restaurantId);
+  };
+
+  const setOfferMutation = useMutation({
+    mutationFn: async ({ restaurant, activate, plan, endDate }) => {
+      const usersList = queryClient.getQueryData(['all-users']) || [];
+      const usersToUpdate = usersList.filter(u => (u.restaurantId || u.restaurant_id) === restaurant.id);
+      if (activate) {
+        await base44.entities.Restaurant.update(restaurant.id, { ownerHasActiveSubscription: true });
+        const endDateIso = endDate ? new Date(endDate).toISOString() : addMonths(new Date(), 12).toISOString();
+        for (const u of usersToUpdate) {
+          await base44.entities.User.update(u.id, {
+            subscriptionStatus: 'active',
+            subscriptionEndDate: endDateIso,
+            subscription_plan: plan || 'pro'
+          });
+        }
+        return { updated: usersToUpdate.length };
+      } else {
+        await base44.entities.Restaurant.update(restaurant.id, { ownerHasActiveSubscription: false });
+        for (const u of usersToUpdate) {
+          await base44.entities.User.update(u.id, {
+            subscriptionStatus: 'expired',
+            subscriptionEndDate: null,
+            subscription_plan: 'none'
+          });
+        }
+        return { updated: usersToUpdate.length };
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries(['all-restaurants']);
+      queryClient.invalidateQueries(['all-users']);
+      queryClient.invalidateQueries(['restaurant']);
+      setOfferDialog({ open: false, restaurant: null });
+      toast.success(
+        variables.activate
+          ? `Offre activée. Les utilisateurs assignés à ce restaurant en bénéficient.`
+          : `Offre désactivée pour ce restaurant.`
+      );
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Erreur lors de la mise à jour de l\'offre');
+    }
   });
 
   const resetForm = () => {
@@ -328,9 +389,14 @@ export default function AdminRestaurants() {
                         </div>
                       </div>
 
-                      <Badge variant={restaurant.isActive ? 'default' : 'secondary'}>
-                        {restaurant.isActive ? 'Actif' : 'Inactif'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {restaurant.ownerHasActiveSubscription && (
+                          <Badge className="bg-green-600">Offre active</Badge>
+                        )}
+                        <Badge variant={restaurant.isActive ? 'default' : 'secondary'}>
+                          {restaurant.isActive ? 'Actif' : 'Inactif'}
+                        </Badge>
+                      </div>
                     </div>
 
                     {restaurant.phone && (
@@ -393,6 +459,30 @@ export default function AdminRestaurants() {
                       >
                         <Edit2 className="h-4 w-4 mr-1" />
                         Modifier
+                      </Button>
+                      <Button
+                        variant={restaurant.ownerHasActiveSubscription ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => {
+                          setOfferDialog({ open: true, restaurant });
+                          if (restaurant.ownerHasActiveSubscription) {
+                            const owner = getRestaurateur(restaurant.id);
+                            setOfferFormData({
+                              subscriptionPlan: (owner?.subscriptionPlan || owner?.subscription_plan) || 'pro',
+                              subscriptionEndDate: owner?.subscriptionEndDate
+                                ? format(new Date(owner.subscriptionEndDate), 'yyyy-MM-dd')
+                                : format(addMonths(new Date(), 12), 'yyyy-MM-dd')
+                            });
+                          } else {
+                            setOfferFormData({
+                              subscriptionPlan: 'pro',
+                              subscriptionEndDate: format(addMonths(new Date(), 12), 'yyyy-MM-dd')
+                            });
+                          }
+                        }}
+                      >
+                        <CreditCard className="h-4 w-4 mr-1" />
+                        Offre
                       </Button>
                       <Button
                         variant="outline"
@@ -618,6 +708,117 @@ export default function AdminRestaurants() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={offerDialog.open} onOpenChange={(open) => setOfferDialog({ open, restaurant: null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Offre — {offerDialog.restaurant?.name}</DialogTitle>
+          </DialogHeader>
+          {offerDialog.restaurant && (
+            <div className="space-y-4 py-4">
+              {offerDialog.restaurant.ownerHasActiveSubscription ? (
+                <>
+                  <p className="text-sm text-gray-600">
+                    Une offre est active pour ce restaurant. Tous les utilisateurs assignés en bénéficient dans leur back-office.
+                  </p>
+                  <div className="space-y-2">
+                    <Label>Plan</Label>
+                    <Select
+                      value={offerFormData.subscriptionPlan}
+                      onValueChange={(v) => setOfferFormData({ ...offerFormData, subscriptionPlan: v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="starter">Essentiel (49€)</SelectItem>
+                        <SelectItem value="pro">Restaurateur (79€)</SelectItem>
+                        <SelectItem value="premium">Elite (109€)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Date de fin</Label>
+                    <Input
+                      type="date"
+                      value={offerFormData.subscriptionEndDate}
+                      onChange={(e) => setOfferFormData({ ...offerFormData, subscriptionEndDate: e.target.value })}
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setOfferMutation.mutate({
+                        restaurant: offerDialog.restaurant,
+                        activate: false
+                      })}
+                      disabled={setOfferMutation.isPending}
+                    >
+                      Désactiver l'offre
+                    </Button>
+                    <Button
+                      onClick={() => setOfferMutation.mutate({
+                        restaurant: offerDialog.restaurant,
+                        activate: true,
+                        plan: offerFormData.subscriptionPlan,
+                        endDate: offerFormData.subscriptionEndDate
+                      })}
+                      disabled={setOfferMutation.isPending}
+                    >
+                      {setOfferMutation.isPending ? 'Enregistrement...' : 'Mettre à jour'}
+                    </Button>
+                  </DialogFooter>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-600">
+                    Activer une offre pour ce restaurant. Tous les utilisateurs assignés à ce restaurant en bénéficieront (réservation en ligne, fonctionnalités back-office).
+                  </p>
+                  <div className="space-y-2">
+                    <Label>Plan</Label>
+                    <Select
+                      value={offerFormData.subscriptionPlan}
+                      onValueChange={(v) => setOfferFormData({ ...offerFormData, subscriptionPlan: v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="starter">Essentiel (49€)</SelectItem>
+                        <SelectItem value="pro">Restaurateur (79€)</SelectItem>
+                        <SelectItem value="premium">Elite (109€)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Date de fin</Label>
+                    <Input
+                      type="date"
+                      value={offerFormData.subscriptionEndDate}
+                      onChange={(e) => setOfferFormData({ ...offerFormData, subscriptionEndDate: e.target.value })}
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setOfferDialog({ open: false, restaurant: null })}
+                    >
+                      Annuler
+                    </Button>
+                    <Button
+                      onClick={() => setOfferMutation.mutate({
+                        restaurant: offerDialog.restaurant,
+                        activate: true,
+                        plan: offerFormData.subscriptionPlan,
+                        endDate: offerFormData.subscriptionEndDate
+                      })}
+                      disabled={setOfferMutation.isPending}
+                    >
+                      {setOfferMutation.isPending ? 'Activation...' : 'Activer l\'offre'}
+                    </Button>
+                  </DialogFooter>
+                </>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

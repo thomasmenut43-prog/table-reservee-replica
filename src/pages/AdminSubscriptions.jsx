@@ -78,6 +78,31 @@ export default function AdminSubscriptions() {
     }
   });
 
+  const syncOffersMutation = useMutation({
+    mutationFn: async () => {
+      const usersList = queryClient.getQueryData(['all-users']) || [];
+      const usersWithRestaurant = usersList.filter(u => u.restaurantId != null || u.restaurant_id != null);
+      let updated = 0;
+      for (const u of usersWithRestaurant) {
+        const rid = u.restaurantId ?? u.restaurant_id;
+        const isActive = (u.subscriptionStatus === 'active' && u.subscriptionEndDate && new Date(u.subscriptionEndDate) > new Date());
+        await base44.entities.Restaurant.update(rid, { ownerHasActiveSubscription: isActive });
+        updated++;
+      }
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries(['all-restaurants']);
+      queryClient.invalidateQueries(['restaurant']);
+      queryClient.invalidateQueries(['restaurants']);
+      toast.success(`${updated} restaurant(s) synchronisé(s). Réservation en ligne à jour.`);
+    },
+    onError: (err) => {
+      console.error('Sync offres:', err);
+      toast.error(err?.message || 'Erreur lors de la synchronisation');
+    }
+  });
+
   const filteredUsers = users.filter(u => {
     if (!u.restaurantId) return false;
     if (!searchQuery) return true;
@@ -176,6 +201,13 @@ export default function AdminSubscriptions() {
               </Button>
               <h1 className="text-xl font-bold text-gray-900">Gestion des abonnements</h1>
             </div>
+            <Button
+              variant="outline"
+              onClick={() => syncOffersMutation.mutate()}
+              disabled={syncOffersMutation.isPending || isLoading}
+            >
+              {syncOffersMutation.isPending ? 'Synchronisation...' : 'Synchroniser les offres'}
+            </Button>
           </div>
         </header>
 
