@@ -38,6 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
 import Sidebar from '@/components/backoffice/Sidebar';
 import SubscriptionGuard from '@/components/backoffice/SubscriptionGuard';
 
@@ -92,6 +93,10 @@ export default function BackofficeBlocks() {
       queryClient.invalidateQueries(['tableBlocks', restaurantId]);
       setIsDialogOpen(false);
       resetForm();
+      toast.success('Indisponibilité ajoutée');
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Impossible d\'ajouter l\'indisponibilité');
     }
   });
   

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { 
+import {
   Plus, Menu, Edit2, Trash2, Users, MapPin, Link2, Ban, CheckCircle, Sun, Moon
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -71,15 +72,15 @@ export default function BackofficeTables() {
     y: null
   });
   const queryClient = useQueryClient();
-  
+
   useEffect(() => {
     base44.auth.me().then(setUser);
   }, []);
-  
+
   const urlParams = new URLSearchParams(window.location.search);
   const urlRestaurantId = urlParams.get('restaurantId');
   const restaurantId = urlRestaurantId || user?.restaurantId;
-  
+
   const { data: restaurant } = useQuery({
     queryKey: ['my-restaurant', restaurantId],
     queryFn: async () => {
@@ -89,7 +90,7 @@ export default function BackofficeTables() {
     },
     enabled: !!restaurantId
   });
-  
+
   const { data: floorPlans = [] } = useQuery({
     queryKey: ['floor-plans', restaurantId],
     queryFn: () => base44.entities.FloorPlan.filter({ restaurantId }),
@@ -106,13 +107,19 @@ export default function BackofficeTables() {
 
   const { data: tables = [], isLoading } = useQuery({
     queryKey: ['tables', restaurantId, selectedFloorPlan],
-    queryFn: () => base44.entities.Table.filter({ restaurantId, floorPlanId: selectedFloorPlan }),
+    queryFn: async () => {
+      const all = await base44.entities.Table.filter({ restaurantId });
+      return all.filter(t => t.floorPlanId === selectedFloorPlan || t.floorPlanId == null);
+    },
     enabled: !!restaurantId && !!selectedFloorPlan
   });
 
   const { data: mapObjects = [] } = useQuery({
     queryKey: ['map-objects', restaurantId, selectedFloorPlan],
-    queryFn: () => base44.entities.MapObject.filter({ restaurantId, floorPlanId: selectedFloorPlan }),
+    queryFn: async () => {
+      const all = await base44.entities.MapObject.filter({ restaurantId });
+      return all.filter(o => o.floorPlanId === selectedFloorPlan || o.floorPlanId == null);
+    },
     enabled: !!restaurantId && !!selectedFloorPlan
   });
 
@@ -129,21 +136,29 @@ export default function BackofficeTables() {
   // Real-time sync for table blocks
   useEffect(() => {
     if (!restaurantId) return;
-    
+
     const unsubscribe = base44.entities.TableBlock.subscribe(() => {
       queryClient.invalidateQueries(['current-blocks', restaurantId]);
     });
-    
+
     return unsubscribe;
   }, [restaurantId, queryClient]);
-  
+
   const createFloorPlan = useMutation({
-    mutationFn: (data) => base44.entities.FloorPlan.create(data),
+    mutationFn: (data) => {
+      console.log('Creating floor plan:', data);
+      return base44.entities.FloorPlan.create(data);
+    },
     onSuccess: (newPlan) => {
+      console.log('Floor plan created:', newPlan);
       queryClient.invalidateQueries(['floor-plans', restaurantId]);
       setSelectedFloorPlan(newPlan.id);
       setFloorPlanDialog({ open: false, plan: null });
       setFloorPlanName('');
+      toast.success('Plan de table créé');
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Impossible de créer le plan de table');
     }
   });
 
@@ -153,6 +168,10 @@ export default function BackofficeTables() {
       queryClient.invalidateQueries(['floor-plans', restaurantId]);
       setFloorPlanDialog({ open: false, plan: null });
       setFloorPlanName('');
+      toast.success('Plan enregistré');
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Impossible d\'enregistrer le plan');
     }
   });
 
@@ -162,39 +181,45 @@ export default function BackofficeTables() {
       queryClient.invalidateQueries(['floor-plans', restaurantId]);
       setSelectedFloorPlan(floorPlans.find(p => p.id !== floorPlanDialog.plan?.id)?.id || null);
       setFloorPlanDialog({ open: false, plan: null });
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de supprimer le plan')
   });
 
   const createTable = useMutation({
     mutationFn: (data) => {
       const { capacity, width, height, tableShape, zone, isActive, isJoinable, ...rest } = data;
-      return base44.entities.Table.create({ 
-        ...rest, 
+      return base44.entities.Table.create({
+        ...rest,
         restaurantId,
         floorPlanId: selectedFloorPlan,
         seats: capacity,
         shape: tableShape === 'round' ? 'round' : 'square',
         zone: zone,
         isJoinable: isJoinable,
+        isActive: isActive !== false,
         status: 'available',
-        position_x: data.x || Math.floor(Math.random() * 20) * 20,
-        position_y: data.y || Math.floor(Math.random() * 15) * 20,
-        width: width * 20,
-        height: height * 20
+        position_x: data.x ?? Math.floor(Math.random() * 20) * 20,
+        position_y: data.y ?? Math.floor(Math.random() * 15) * 20,
+        width: (width ?? 3) * 20,
+        height: (height ?? 2) * 20
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['tables', restaurantId, selectedFloorPlan]);
       setIsDialogOpen(false);
       resetForm();
+      toast.success('Table ajoutée');
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Impossible d\'ajouter la table');
     }
   });
-  
+
   const updateTable = useMutation({
     mutationFn: ({ id, data }) => {
       const { capacity, width, height, tableShape, zone, isActive, isJoinable, ...rest } = data;
-      return base44.entities.Table.update(id, { 
-        ...rest, 
+      return base44.entities.Table.update(id, {
+        ...rest,
         seats: capacity,
         shape: tableShape === 'round' ? 'round' : 'square',
         zone: zone,
@@ -207,22 +232,25 @@ export default function BackofficeTables() {
       queryClient.invalidateQueries(['tables', restaurantId, selectedFloorPlan]);
       setIsDialogOpen(false);
       resetForm();
-    }
+      toast.success('Table enregistrée');
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible d\'enregistrer la table')
   });
-  
+
   const removeTable = useMutation({
     mutationFn: (id) => base44.entities.Table.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries(['tables', restaurantId, selectedFloorPlan]);
       setDeleteTable(null);
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de supprimer')
   });
 
   const blockTable = useMutation({
     mutationFn: ({ tableId, service, soirService }) => {
       const today = new Date();
       let startDateTime, endDateTime;
-      
+
       if (service === 'MIDI') {
         startDateTime = new Date(today.setHours(0, 0, 0, 0));
         endDateTime = new Date(today.setHours(16, 0, 0, 0));
@@ -235,7 +263,7 @@ export default function BackofficeTables() {
           endDateTime = new Date(today.setHours(23, 59, 59, 999));
         }
       }
-      
+
       return base44.entities.TableBlock.create({
         restaurantId,
         tableId,
@@ -249,29 +277,31 @@ export default function BackofficeTables() {
       setBlockDialog({ open: false, table: null });
       setBlockService('MIDI');
       setBlockSoirService(1);
-    }
+      toast.success('Table bloquée');
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de bloquer la table')
   });
 
   const unblockTable = useMutation({
     mutationFn: (blockId) => base44.entities.TableBlock.delete(blockId),
     onSuccess: () => {
       queryClient.invalidateQueries(['current-blocks', restaurantId]);
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de débloquer')
   });
 
   const clearAllData = useMutation({
     mutationFn: async () => {
-      // Delete all tables
       await Promise.all(tables.map(t => base44.entities.Table.delete(t.id)));
-      // Delete all map objects
       await Promise.all(mapObjects.map(o => base44.entities.MapObject.delete(o.id)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['tables', restaurantId, selectedFloorPlan]);
       queryClient.invalidateQueries(['map-objects', restaurantId, selectedFloorPlan]);
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Erreur lors de la réinitialisation')
   });
-  
+
   const resetForm = () => {
     setEditingTable(null);
     setFormData({
@@ -287,7 +317,7 @@ export default function BackofficeTables() {
       y: null
     });
   };
-  
+
   const openEditDialog = (table) => {
     setEditingTable(table);
     setFormData({
@@ -306,12 +336,12 @@ export default function BackofficeTables() {
   };
 
   const handleUpdatePosition = async (tableId, position) => {
-    await updateTable.mutateAsync({ 
-      id: tableId, 
+    await updateTable.mutateAsync({
+      id: tableId,
       data: position
     });
   };
-  
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (editingTable) {
@@ -320,7 +350,7 @@ export default function BackofficeTables() {
       createTable.mutate(formData);
     }
   };
-  
+
   // Check if table is currently blocked
   const isTableBlocked = (tableId) => {
     return currentBlocks.some(b => b.tableId === tableId);
@@ -335,15 +365,15 @@ export default function BackofficeTables() {
     ...zone,
     tables: tables.filter(t => t.zone === zone.value)
   }));
-  
+
   const totalCapacity = tables.filter(t => t.status === 'available').reduce((sum, t) => sum + (t.seats || t.capacity), 0);
-  
+
   if (!user) {
     return null;
   }
-  
+
   const isAdmin = user.role === 'admin';
-  
+
   if (!restaurantId && !isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -354,7 +384,7 @@ export default function BackofficeTables() {
       </div>
     );
   }
-  
+
   if (!restaurantId && isAdmin) {
     const RestaurantSelector = React.lazy(() => import('@/components/backoffice/RestaurantSelector'));
     return (
@@ -363,21 +393,21 @@ export default function BackofficeTables() {
       </React.Suspense>
     );
   }
-  
-  const isSubscribed = user?.subscriptionStatus === 'active' && 
-    user?.subscriptionEndDate && 
+
+  const isSubscribed = user?.subscriptionStatus === 'active' &&
+    user?.subscriptionEndDate &&
     new Date(user.subscriptionEndDate) > new Date();
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar 
-        user={user} 
+      <Sidebar
+        user={user}
         restaurant={restaurant}
         isAdmin={false}
         isMobileOpen={isMobileOpen}
         setIsMobileOpen={setIsMobileOpen}
       />
-      
+
       <div className="flex-1 min-w-0">
         {/* Header */}
         <header className="bg-white border-b sticky top-0 z-30">
@@ -398,7 +428,7 @@ export default function BackofficeTables() {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2">
               {floorPlans.length > 0 && (
                 <>
@@ -414,46 +444,52 @@ export default function BackofficeTables() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button 
-                    variant="outline" 
-                    size="icon"
+                  {isSubscribed && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        const currentPlan = floorPlans.find(p => p.id === selectedFloorPlan);
+                        setFloorPlanDialog({ open: true, plan: currentPlan });
+                        setFloorPlanName(currentPlan?.name || '');
+                      }}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </>
+              )}
+              {isSubscribed && (
+                <>
+                  <Button
+                    variant="outline"
                     onClick={() => {
-                      const currentPlan = floorPlans.find(p => p.id === selectedFloorPlan);
-                      setFloorPlanDialog({ open: true, plan: currentPlan });
-                      setFloorPlanName(currentPlan?.name || '');
+                      setFloorPlanDialog({ open: true, plan: null });
+                      setFloorPlanName('');
                     }}
                   >
-                    <Edit2 className="h-4 w-4" />
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nouveau plan
+                  </Button>
+                  {(tables.length > 0 || mapObjects.length > 0) && (
+                    <Button
+                      variant="destructive"
+                      onClick={() => setClearDataDialog(true)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Réinitialiser
+                    </Button>
+                  )}
+                  <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Ajouter une table
                   </Button>
                 </>
               )}
-              <Button 
-                variant="outline"
-                onClick={() => {
-                  setFloorPlanDialog({ open: true, plan: null });
-                  setFloorPlanName('');
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Nouveau plan
-              </Button>
-              {(tables.length > 0 || mapObjects.length > 0) && (
-                <Button 
-                  variant="destructive"
-                  onClick={() => setClearDataDialog(true)}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Réinitialiser
-                </Button>
-              )}
-              <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter une table
-              </Button>
             </div>
           </div>
         </header>
-        
+
         {/* Content */}
         <main className="p-4 lg:p-8">
           <SubscriptionGuard user={user}>
@@ -462,7 +498,7 @@ export default function BackofficeTables() {
                 <TabsTrigger value="visual">Vue visuelle</TabsTrigger>
                 <TabsTrigger value="list">Vue liste</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="visual" className="space-y-6">
                 {selectedFloorPlan ? (
                   <TableMapBuilder
@@ -474,125 +510,127 @@ export default function BackofficeTables() {
                 ) : (
                   <div className="text-center py-12 bg-gray-100 rounded-xl">
                     <p className="text-gray-600 mb-4">Aucun plan de table créé</p>
-                    <Button onClick={() => setFloorPlanDialog({ open: true, plan: null })}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Créer un plan
-                    </Button>
+                    {isSubscribed && (
+                      <Button onClick={() => setFloorPlanDialog({ open: true, plan: null })}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Créer un plan
+                      </Button>
+                    )}
                   </div>
                 )}
               </TabsContent>
-              
+
               <TabsContent value="list">
                 {tablesByZone.map(zone => (
-            <div key={zone.value} className="mb-8">
-              <div className="flex items-center gap-3 mb-4">
-                <MapPin className="h-5 w-5 text-gray-400" />
-                <h2 className="text-lg font-semibold text-gray-900">{zone.label}</h2>
-                <Badge variant="secondary">
-                  {zone.tables.length} table{zone.tables.length > 1 ? 's' : ''}
-                </Badge>
-              </div>
-              
-              {zone.tables.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {zone.tables.map(table => {
-                    const blocked = isTableBlocked(table.id);
-                    const block = getTableBlock(table.id);
-                    return (
-                      <Card key={table.id} className={table.status === 'blocked' ? 'opacity-60' : blocked ? 'border-red-300 bg-red-50' : ''}>
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between mb-3">
-                            <div>
-                              <h3 className="font-semibold text-lg">{table.name}</h3>
-                              <div className="flex items-center gap-2 text-sm text-gray-500">
-                                <Users className="h-4 w-4" />
-                                {table.seats || table.capacity} places
-                              </div>
-                            </div>
-                            <div className="flex gap-1">
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                onClick={() => openEditDialog(table)}
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                onClick={() => setDeleteTable(table)}
-                              >
-                                <Trash2 className="h-4 w-4 text-red-500" />
-                              </Button>
-                            </div>
-                          </div>
+                  <div key={zone.value} className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                      <MapPin className="h-5 w-5 text-gray-400" />
+                      <h2 className="text-lg font-semibold text-gray-900">{zone.label}</h2>
+                      <Badge variant="secondary">
+                        {zone.tables.length} table{zone.tables.length > 1 ? 's' : ''}
+                      </Badge>
+                    </div>
 
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap gap-2">
-                              {table.status === 'blocked' && (
-                                <Badge variant="outline" className="text-gray-500">
-                                  Bloquée
-                                </Badge>
-                              )}
-                              {table.isJoinable && (
-                                <Badge variant="outline" className="text-blue-600 border-blue-200">
-                                  <Link2 className="h-3 w-3 mr-1" />
-                                  Jumelable
-                                </Badge>
-                              )}
-                              {blocked && (
-                                <Badge className="bg-red-600">
-                                  <Ban className="h-3 w-3 mr-1" />
-                                  Occupée
-                                </Badge>
-                              )}
-                            </div>
+                    {zone.tables.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {zone.tables.map(table => {
+                          const blocked = isTableBlocked(table.id);
+                          const block = getTableBlock(table.id);
+                          return (
+                            <Card key={table.id} className={table.status === 'blocked' ? 'opacity-60' : blocked ? 'border-red-300 bg-red-50' : ''}>
+                              <CardContent className="p-4">
+                                <div className="flex items-start justify-between mb-3">
+                                  <div>
+                                    <h3 className="font-semibold text-lg">{table.name}</h3>
+                                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                                      <Users className="h-4 w-4" />
+                                      {table.seats || table.capacity} places
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => openEditDialog(table)}
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => setDeleteTable(table)}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-red-500" />
+                                    </Button>
+                                  </div>
+                                </div>
 
-                            {blocked ? (
-                              <div className="pt-2 border-t">
-                                <p className="text-xs text-gray-600 mb-2">
-                                  Disponible vers {new Date(block.endDateTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                                </p>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="w-full"
-                                  onClick={() => unblockTable.mutate(block.id)}
-                                >
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                  Libérer maintenant
-                                </Button>
-                              </div>
-                            ) : table.status === 'available' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="w-full mt-2"
-                                onClick={() => setBlockDialog({ open: true, table })}
-                              >
-                                <Ban className="h-3 w-3 mr-1" />
-                                Marquer occupée
-                              </Button>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="bg-gray-100 rounded-xl p-8 text-center text-gray-500">
-                  Aucune table dans cette zone
-                </div>
-              )}
-            </div>
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap gap-2">
+                                    {table.status === 'blocked' && (
+                                      <Badge variant="outline" className="text-gray-500">
+                                        Bloquée
+                                      </Badge>
+                                    )}
+                                    {table.isJoinable && (
+                                      <Badge variant="outline" className="text-blue-600 border-blue-200">
+                                        <Link2 className="h-3 w-3 mr-1" />
+                                        Jumelable
+                                      </Badge>
+                                    )}
+                                    {blocked && (
+                                      <Badge className="bg-red-600">
+                                        <Ban className="h-3 w-3 mr-1" />
+                                        Occupée
+                                      </Badge>
+                                    )}
+                                  </div>
+
+                                  {blocked ? (
+                                    <div className="pt-2 border-t">
+                                      <p className="text-xs text-gray-600 mb-2">
+                                        Disponible vers {new Date(block.endDateTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                      </p>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="w-full"
+                                        onClick={() => unblockTable.mutate(block.id)}
+                                      >
+                                        <CheckCircle className="h-3 w-3 mr-1" />
+                                        Libérer maintenant
+                                      </Button>
+                                    </div>
+                                  ) : table.status === 'available' && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="w-full mt-2"
+                                      onClick={() => setBlockDialog({ open: true, table })}
+                                    >
+                                      <Ban className="h-3 w-3 mr-1" />
+                                      Marquer occupée
+                                    </Button>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="bg-gray-100 rounded-xl p-8 text-center text-gray-500">
+                        Aucune table dans cette zone
+                      </div>
+                    )}
+                  </div>
                 ))}
               </TabsContent>
             </Tabs>
           </SubscriptionGuard>
         </main>
       </div>
-      
+
       {/* Add/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
@@ -601,7 +639,7 @@ export default function BackofficeTables() {
               {editingTable ? 'Modifier la table' : 'Ajouter une table'}
             </DialogTitle>
           </DialogHeader>
-          
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label>Nom / Numéro</Label>
@@ -612,7 +650,7 @@ export default function BackofficeTables() {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label>Capacité (places)</Label>
               <Input
@@ -624,7 +662,7 @@ export default function BackofficeTables() {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label>Zone</Label>
               <Select
@@ -659,7 +697,7 @@ export default function BackofficeTables() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="flex items-center justify-between py-2">
               <div>
                 <Label>Table active</Label>
@@ -672,7 +710,7 @@ export default function BackofficeTables() {
                 onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
               />
             </div>
-            
+
             <div className="flex items-center justify-between py-2">
               <div>
                 <Label>Table jumelable</Label>
@@ -708,7 +746,7 @@ export default function BackofficeTables() {
                 />
               </div>
             </div>
-            
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Annuler
@@ -720,7 +758,7 @@ export default function BackofficeTables() {
           </form>
         </DialogContent>
       </Dialog>
-      
+
       {/* Delete Confirmation */}
       <AlertDialog open={!!deleteTable} onOpenChange={() => setDeleteTable(null)}>
         <AlertDialogContent>
@@ -751,7 +789,7 @@ export default function BackofficeTables() {
               {floorPlanDialog.plan ? 'Modifier le plan' : 'Nouveau plan de table'}
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Nom du plan</Label>
@@ -762,7 +800,7 @@ export default function BackofficeTables() {
               />
             </div>
           </div>
-          
+
           <DialogFooter>
             {floorPlanDialog.plan && (
               <Button
@@ -773,30 +811,42 @@ export default function BackofficeTables() {
                 Supprimer
               </Button>
             )}
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setFloorPlanDialog({ open: false, plan: null })}
             >
               Annuler
             </Button>
             <Button
               onClick={() => {
+                if (!restaurantId) {
+                  toast.error("Erreur: Identifiant du restaurant manquant");
+                  return;
+                }
+                if (!floorPlanName.trim()) {
+                  toast.error("Veuillez entrer un nom pour le plan");
+                  return;
+                }
+
                 if (floorPlanDialog.plan) {
-                  updateFloorPlan.mutate({ 
-                    id: floorPlanDialog.plan.id, 
-                    data: { name: floorPlanName } 
+                  updateFloorPlan.mutate({
+                    id: floorPlanDialog.plan.id,
+                    data: { name: floorPlanName }
                   });
                 } else {
-                  createFloorPlan.mutate({ 
-                    restaurantId, 
+                  createFloorPlan.mutate({
+                    restaurantId,
                     name: floorPlanName,
                     isDefault: floorPlans.length === 0
                   });
                 }
               }}
-              disabled={!floorPlanName || createFloorPlan.isPending || updateFloorPlan.isPending}
+              disabled={!floorPlanName.trim() || createFloorPlan.isPending || updateFloorPlan.isPending}
             >
               {floorPlanDialog.plan ? 'Enregistrer' : 'Créer'}
+              {(createFloorPlan.isPending || updateFloorPlan.isPending) && (
+                <span className="ml-2 animate-spin">⌛</span>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -834,12 +884,12 @@ export default function BackofficeTables() {
           <DialogHeader>
             <DialogTitle>Marquer la table comme occupée</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <p className="text-sm text-gray-600">
               Table : <strong>{blockDialog.table?.name}</strong>
             </p>
-            
+
             <div className="space-y-2">
               <Label>Service d'occupation</Label>
               <div className="grid grid-cols-2 gap-2">
@@ -863,7 +913,7 @@ export default function BackofficeTables() {
                 </Button>
               </div>
             </div>
-            
+
             {blockService === 'SOIR' && (
               <div className="space-y-2">
                 <Label>Service soir</Label>
@@ -888,18 +938,18 @@ export default function BackofficeTables() {
               </div>
             )}
           </div>
-          
+
           <DialogFooter>
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => setBlockDialog({ open: false, table: null })}
             >
               Annuler
             </Button>
             <Button
-              onClick={() => blockTable.mutate({ 
-                tableId: blockDialog.table?.id, 
+              onClick={() => blockTable.mutate({
+                tableId: blockDialog.table?.id,
                 service: blockService,
                 soirService: blockSoirService
               })}

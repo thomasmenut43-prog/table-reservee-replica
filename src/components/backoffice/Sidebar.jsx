@@ -4,7 +4,7 @@ import { createPageUrl } from '@/utils';
 import {
   LayoutDashboard, CalendarDays, UtensilsCrossed, Clock,
   Ban, Settings, ChevronRight, Building2, Users, BarChart3,
-  Menu, X, Home, CheckCircle2, FileText, TrendingUp
+  Menu, X, Home, CheckCircle2, FileText, TrendingUp, CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ const restaurateurLinks = [
   { name: 'Tables', page: 'BackofficeTables', icon: UtensilsCrossed },
   { name: 'Services & Horaires', page: 'BackofficeSchedules', icon: Clock },
   { name: 'Indisponibilités', page: 'BackofficeBlocks', icon: Ban },
+  { name: 'Offre', page: 'BackofficeSubscription', icon: CreditCard },
   { name: 'Paramètres', page: 'BackofficeSettings', icon: Settings }
 ];
 
@@ -23,7 +24,6 @@ const adminLinks = [
   { name: 'Vue d\'ensemble', page: 'AdminDashboard', icon: BarChart3 },
   { name: 'Restaurants', page: 'AdminRestaurants', icon: Building2 },
   { name: 'Utilisateurs', page: 'AdminUsers', icon: Users },
-  { name: 'Offres', page: 'AdminSubscriptions', icon: CalendarDays },
   { name: 'Réservations', page: 'AdminReservations', icon: CalendarDays },
   { name: 'Design', page: 'AdminDesign', icon: Settings },
   { name: 'Pages Légales', page: 'AdminLegal', icon: FileText }
@@ -36,13 +36,15 @@ export default function Sidebar({ user, restaurant, isAdmin, isMobileOpen, setIs
   const links = isAdmin ? adminLinks : restaurateurLinks;
 
   const urlParams = new URLSearchParams(window.location.search);
-  const restaurantId = urlParams.get('restaurantId');
+  const restaurantIdFromUrl = urlParams.get('restaurantId');
+  // Garder le restaurant dans l’URL pour tous les onglets (admin + restaurateur)
+  const restaurantId = restaurantIdFromUrl || restaurant?.id;
 
   const createLinkUrl = (page) => {
-    if (!isAdmin || !restaurantId) {
+    if (!restaurantId) {
       return createPageUrl(page);
     }
-    return createPageUrl(`${page}?restaurantId=${restaurantId}`);
+    return createPageUrl(page) + `?restaurantId=${restaurantId}`;
   };
 
   return (

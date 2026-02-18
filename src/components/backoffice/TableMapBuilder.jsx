@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
 import { 
   Square, Circle, RectangleHorizontal, Building2, Palmtree, 
@@ -32,11 +33,17 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
   const [dragging, setDragging] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [dragPosition, setDragPosition] = useState(null);
+  const [resizing, setResizing] = useState(null);
+  const [resizeSize, setResizeSize] = useState(null);
   const [zoom, setZoom] = useState(1);
   const [editDialog, setEditDialog] = useState({ open: false, item: null });
   const [formData, setFormData] = useState({});
   const canvasRef = useRef(null);
   const queryClient = useQueryClient();
+  const dragPositionRef = useRef(null);
+  const hasMovedRef = useRef(false);
+  const resizeRef = useRef({ startX: 0, startY: 0, startWidth: 0, startHeight: 0 });
+  const resizeSizeRef = useRef(null);
 
   const canvasWidth = 800;
   const canvasHeight = 600;
@@ -45,76 +52,145 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
   const createTableMutation = useMutation({
     mutationFn: (data) => base44.entities.Table.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['tables', restaurantId]);
+      queryClient.invalidateQueries(['tables', restaurantId, floorPlanId]);
     }
   });
 
   const updateTableMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Table.update(id, data),
     onMutate: async ({ id, data }) => {
-      await queryClient.cancelQueries(['tables', restaurantId]);
-      const previousTables = queryClient.getQueryData(['tables', restaurantId]);
-      queryClient.setQueryData(['tables', restaurantId], old => 
+      await queryClient.cancelQueries(['tables', restaurantId, floorPlanId]);
+      const previousTables = queryClient.getQueryData(['tables', restaurantId, floorPlanId]);
+      queryClient.setQueryData(['tables', restaurantId, floorPlanId], old => 
         old?.map(t => t.id === id ? { ...t, ...data } : t)
       );
       return { previousTables };
     },
     onError: (err, variables, context) => {
-      queryClient.setQueryData(['tables', restaurantId], context.previousTables);
+      queryClient.setQueryData(['tables', restaurantId, floorPlanId], context.previousTables);
+      toast.error(err?.message || 'Impossible d\'enregistrer la table');
     },
     onSettled: () => {
-      queryClient.invalidateQueries(['tables', restaurantId]);
+      queryClient.invalidateQueries(['tables', restaurantId, floorPlanId]);
     }
   });
 
   const deleteTableMutation = useMutation({
     mutationFn: (id) => base44.entities.Table.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries(['tables', restaurantId]);
-    }
+      queryClient.invalidateQueries(['tables', restaurantId, floorPlanId]);
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de supprimer la table')
   });
 
   const createObjectMutation = useMutation({
     mutationFn: (data) => base44.entities.MapObject.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['map-objects', restaurantId]);
+      queryClient.invalidateQueries(['map-objects', restaurantId, floorPlanId]);
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Impossible d\'ajouter l\'élément');
     }
   });
 
   const updateObjectMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.MapObject.update(id, data),
     onMutate: async ({ id, data }) => {
-      await queryClient.cancelQueries(['map-objects', restaurantId]);
-      const previousObjects = queryClient.getQueryData(['map-objects', restaurantId]);
-      queryClient.setQueryData(['map-objects', restaurantId], old => 
+      await queryClient.cancelQueries(['map-objects', restaurantId, floorPlanId]);
+      const previousObjects = queryClient.getQueryData(['map-objects', restaurantId, floorPlanId]);
+      queryClient.setQueryData(['map-objects', restaurantId, floorPlanId], old => 
         old?.map(o => o.id === id ? { ...o, ...data } : o)
       );
       return { previousObjects };
     },
     onError: (err, variables, context) => {
-      queryClient.setQueryData(['map-objects', restaurantId], context.previousObjects);
+      queryClient.setQueryData(['map-objects', restaurantId, floorPlanId], context.previousObjects);
+      toast.error(err?.message || 'Impossible d\'enregistrer l\'élément');
     },
     onSettled: () => {
-      queryClient.invalidateQueries(['map-objects', restaurantId]);
+      queryClient.invalidateQueries(['map-objects', restaurantId, floorPlanId]);
     }
   });
 
   const deleteObjectMutation = useMutation({
     mutationFn: (id) => base44.entities.MapObject.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries(['map-objects', restaurantId]);
-    }
+      queryClient.invalidateQueries(['map-objects', restaurantId, floorPlanId]);
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de supprimer l\'élément')
   });
 
 
 
+  const MIN_WIDTH = 20;
+  const MIN_HEIGHT = 20;
+
+  // Resize: start
+  const handleResizeStart = (e, item, isTable) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (item.locked) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x0 = (e.clientX - rect.left) / zoom;
+    const y0 = (e.clientY - rect.top) / zoom;
+    const w0 = item.width ?? 60;
+    const h0 = item.height ?? 40;
+    resizeRef.current = { startX: x0, startY: y0, startWidth: w0, startHeight: h0 };
+    setResizing({ item, isTable });
+    setResizeSize({ width: w0, height: h0 });
+  };
+
+  // Resize: move & end
+  useEffect(() => {
+    if (!resizing) return;
+
+    const handleMouseMove = (e) => {
+      if (!canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / zoom;
+      const y = (e.clientY - rect.top) / zoom;
+      const { startX, startY, startWidth, startHeight } = resizeRef.current;
+      const newWidth = Math.max(MIN_WIDTH, Math.round(startWidth + (x - startX)));
+      const newHeight = Math.max(MIN_HEIGHT, Math.round(startHeight + (y - startY)));
+      resizeSizeRef.current = { width: newWidth, height: newHeight };
+      setResizeSize({ width: newWidth, height: newHeight });
+    };
+
+    const handleMouseUp = () => {
+      const size = resizeSizeRef.current;
+      if (size && resizing) {
+        if (resizing.isTable) {
+          updateTableMutation.mutate({
+            id: resizing.item.id,
+            data: { width: size.width, height: size.height }
+          });
+        } else {
+          updateObjectMutation.mutate({
+            id: resizing.item.id,
+            data: { width: size.width, height: size.height }
+          });
+        }
+      }
+      setResizing(null);
+      setResizeSize(null);
+      resizeSizeRef.current = null;
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing, zoom]);
+
   // Handle canvas click to add items (only objects, not tables)
   const handleCanvasClick = (e) => {
-    if (!selectedTool || !canvasRef.current || dragging) return;
+    if (!selectedTool || !canvasRef.current || dragging || resizing) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = Math.max(0, (e.clientX - rect.left) / zoom);
-    const y = Math.max(0, (e.clientY - rect.top) / zoom);
+    const x = Math.round(Math.max(0, (e.clientX - rect.left) / zoom));
+    const y = Math.round(Math.max(0, (e.clientY - rect.top) / zoom));
 
     const objectSizes = {
       wall: { width: 200, height: 20 },
@@ -132,7 +208,8 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
       type: selectedTool,
       position_x: x,
       position_y: y,
-      ...size,
+      width: size.width,
+      height: size.height,
       rotation: 0,
       color: selectedTool === 'wall' ? '#6B7280' : selectedTool === 'plant' ? '#10B981' : '#8B5CF6'
     });
@@ -144,13 +221,15 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
   const handleDragStart = (e, item, isTable) => {
     e.stopPropagation();
     e.preventDefault();
-    if (item.locked) return;
+    if (item.locked || resizing) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
+    hasMovedRef.current = false;
+    dragPositionRef.current = null;
     setDragging({ item, isTable, hasMoved: false });
     setDragOffset({
-      x: (e.clientX - rect.left) / zoom - item.position_x,
-      y: (e.clientY - rect.top) / zoom - item.position_y
+      x: (e.clientX - rect.left) / zoom - (item.position_x ?? item.positionX ?? 0),
+      y: (e.clientY - rect.top) / zoom - (item.position_y ?? item.positionY ?? 0)
     });
   };
 
@@ -165,32 +244,35 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
       const x = (e.clientX - rect.left) / zoom - dragOffset.x;
       const y = (e.clientY - rect.top) / zoom - dragOffset.y;
 
-      // Mark as moved if position changed
-      if (!dragging.hasMoved) {
-        setDragging({ ...dragging, hasMoved: true });
-      }
-
-      // Update position locally for instant visual feedback
+      hasMovedRef.current = true;
+      dragPositionRef.current = { x, y };
       setDragPosition({ x, y });
     };
 
     const handleMouseUp = () => {
-      if (dragging.hasMoved && dragPosition) {
-        // Save to database only if item was actually moved
+      const savedPosition = dragPositionRef.current;
+      const didMove = hasMovedRef.current;
+
+      if (didMove && savedPosition) {
+        const posX = Math.round(Number(savedPosition.x));
+        const posY = Math.round(Number(savedPosition.y));
         if (dragging.isTable) {
           updateTableMutation.mutate({ 
             id: dragging.item.id, 
-            data: { position_x: dragPosition.x, position_y: dragPosition.y } 
+            data: { position_x: posX, position_y: posY } 
           });
         } else {
           updateObjectMutation.mutate({ 
             id: dragging.item.id, 
-            data: { position_x: dragPosition.x, position_y: dragPosition.y } 
+            data: { position_x: posX, position_y: posY } 
           });
         }
       }
+
       setDragging(null);
       setDragPosition(null);
+      dragPositionRef.current = null;
+      hasMovedRef.current = false;
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -200,7 +282,7 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragging, dragOffset, zoom, dragPosition]);
+  }, [dragging, dragOffset, zoom]);
 
   // Open edit dialog
   const openEditDialog = (item, isTable) => {
@@ -306,7 +388,7 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
         
         <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
           <p className="text-sm text-gray-700">
-            💡 Utilisez le bouton "Ajouter une table" en haut pour créer de nouvelles tables
+            💡 Utilisez le bouton "Ajouter une table" en haut pour créer de nouvelles tables. Passez la souris sur un élément puis tirez la poignée bleue en bas à droite pour modifier la largeur et la hauteur.
           </p>
         </div>
       </Card>
@@ -330,8 +412,11 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
             {/* Map Objects */}
             {mapObjects?.map(obj => {
               const isDragging = dragging?.item?.id === obj.id && !dragging.isTable;
-              const posX = isDragging && dragPosition ? dragPosition.x : obj.position_x;
-              const posY = isDragging && dragPosition ? dragPosition.y : obj.position_y;
+              const isResizing = resizing?.item?.id === obj.id && !resizing.isTable;
+              const posX = isDragging && dragPosition ? dragPosition.x : (obj.position_x ?? obj.positionX ?? 0);
+              const posY = isDragging && dragPosition ? dragPosition.y : (obj.position_y ?? obj.positionY ?? 0);
+              const w = isResizing && resizeSize ? resizeSize.width : (obj.width ?? 60);
+              const h = isResizing && resizeSize ? resizeSize.height : (obj.height ?? 40);
               
               return (
               <div
@@ -340,8 +425,8 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
                 style={{
                   left: `${posX}px`,
                   top: `${posY}px`,
-                  width: `${obj.width}px`,
-                  height: `${obj.height}px`,
+                  width: `${w}px`,
+                  height: `${h}px`,
                   transform: `rotate(${obj.rotation}deg)`,
                   backgroundColor: obj.type === 'plant' ? 'transparent' : obj.color,
                   opacity: obj.locked ? 0.5 : 1,
@@ -358,6 +443,13 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
               >
                 {obj.type === 'plant' && (
                   <Palmtree className="w-full h-full" style={{ color: '#10B981' }} />
+                )}
+                {!obj.locked && (
+                  <div
+                    className="absolute bottom-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-sm cursor-se-resize opacity-0 group-hover:opacity-100 z-10 shadow"
+                    title="Redimensionner (glisser)"
+                    onMouseDown={(e) => handleResizeStart(e, obj, false)}
+                  />
                 )}
                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 flex gap-1 pointer-events-auto">
                   <Button
@@ -407,8 +499,11 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
                     {/* Tables */}
             {tables?.map(table => {
               const isDragging = dragging?.item?.id === table.id && dragging.isTable;
-              const posX = isDragging && dragPosition ? dragPosition.x : table.position_x;
-              const posY = isDragging && dragPosition ? dragPosition.y : table.position_y;
+              const isResizing = resizing?.item?.id === table.id && resizing.isTable;
+              const posX = isDragging && dragPosition ? dragPosition.x : (table.position_x ?? table.positionX ?? 0);
+              const posY = isDragging && dragPosition ? dragPosition.y : (table.position_y ?? table.positionY ?? 0);
+              const w = isResizing && resizeSize ? resizeSize.width : (table.width ?? 60);
+              const h = isResizing && resizeSize ? resizeSize.height : (table.height ?? 40);
               
               return (
               <div
@@ -419,10 +514,10 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
                 style={{
                   left: `${posX}px`,
                   top: `${posY}px`,
-                  width: `${table.width}px`,
-                  height: `${table.height}px`,
-                  transform: `rotate(${table.rotation}deg)`,
-                  borderRadius: table.shape === 'round' ? '50%' : '8px'
+                  width: `${w}px`,
+                  height: `${h}px`,
+                  transform: `rotate(${table.rotation ?? 0}deg)`,
+                  borderRadius: (table.shape || 'square') === 'round' ? '50%' : '8px'
                 }}
                 onMouseDown={(e) => handleDragStart(e, table, true)}
                 onClick={(e) => {
@@ -435,6 +530,12 @@ export default function TableMapBuilder({ restaurantId, floorPlanId, tables, map
                   <Users className="h-3 w-3" />
                   <span>{table.seats}</span>
                 </div>
+
+                <div
+                  className="absolute bottom-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-sm cursor-se-resize opacity-0 group-hover:opacity-100 z-10 shadow"
+                  title="Redimensionner (glisser)"
+                  onMouseDown={(e) => handleResizeStart(e, table, true)}
+                />
 
                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 flex gap-1 pointer-events-auto">
                   <Button

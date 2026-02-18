@@ -3,9 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+import { format, addMonths } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import {
   Menu, Plus, Search, Building2, MapPin, Phone, Edit2,
-  Trash2, Power, ExternalLink, Eye, X, Tag, Upload, Image as ImageIcon, Settings
+  Trash2, Power, ExternalLink, Eye, X, Tag, Upload, Image as ImageIcon, Settings, CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
 import Sidebar from '@/components/backoffice/Sidebar';
 import StarRating from '@/components/ui/StarRating';
 
@@ -64,6 +67,12 @@ export default function AdminRestaurants() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [newCategory, setNewCategory] = useState('');
   const [assignedRestaurantId, setAssignedRestaurantId] = useState('');
+  const [offerDialog, setOfferDialog] = useState({ open: false, restaurant: null });
+  const [offerFormData, setOfferFormData] = useState({
+    subscriptionPlan: 'pro',
+    subscriptionEndDate: format(addMonths(new Date(), 12), 'yyyy-MM-dd')
+  });
+
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -97,10 +106,10 @@ export default function AdminRestaurants() {
       queryClient.invalidateQueries(['all-restaurants']);
       setIsDialogOpen(false);
       resetForm();
+      toast.success('Restaurant créé avec succès');
     },
     onError: (error) => {
-      console.error('Error creating restaurant:', error);
-      alert('Erreur lors de la création: ' + error.message);
+      toast.error(error?.message || 'Erreur lors de la création du restaurant');
     }
   });
 
@@ -114,10 +123,10 @@ export default function AdminRestaurants() {
       queryClient.invalidateQueries(['all-restaurants']);
       setIsDialogOpen(false);
       resetForm();
+      toast.success('Restaurant mis à jour');
     },
     onError: (error) => {
-      console.error('Error updating restaurant:', error);
-      alert('Erreur lors de la mise à jour: ' + error.message);
+      toast.error(error?.message || 'Erreur lors de l\'enregistrement du restaurant');
     }
   });
 
@@ -126,6 +135,54 @@ export default function AdminRestaurants() {
     onSuccess: () => {
       queryClient.invalidateQueries(['all-restaurants']);
       setDeleteRestaurant(null);
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible de supprimer le restaurant')
+  });
+
+  const getUsersForRestaurant = (restaurantId) => {
+    return users.filter(u => (u.restaurantId || u.restaurant_id) === restaurantId);
+  };
+
+  const setOfferMutation = useMutation({
+    mutationFn: async ({ restaurant, activate, plan, endDate }) => {
+      const usersList = queryClient.getQueryData(['all-users']) || [];
+      const usersToUpdate = usersList.filter(u => (u.restaurantId || u.restaurant_id) === restaurant.id);
+      if (activate) {
+        await base44.entities.Restaurant.update(restaurant.id, { ownerHasActiveSubscription: true });
+        const endDateIso = endDate ? new Date(endDate).toISOString() : addMonths(new Date(), 12).toISOString();
+        for (const u of usersToUpdate) {
+          await base44.entities.User.update(u.id, {
+            subscriptionStatus: 'active',
+            subscriptionEndDate: endDateIso,
+            subscription_plan: plan || 'pro'
+          });
+        }
+        return { updated: usersToUpdate.length };
+      } else {
+        await base44.entities.Restaurant.update(restaurant.id, { ownerHasActiveSubscription: false });
+        for (const u of usersToUpdate) {
+          await base44.entities.User.update(u.id, {
+            subscriptionStatus: 'expired',
+            subscriptionEndDate: null,
+            subscription_plan: 'none'
+          });
+        }
+        return { updated: usersToUpdate.length };
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries(['all-restaurants']);
+      queryClient.invalidateQueries(['all-users']);
+      queryClient.invalidateQueries(['restaurant']);
+      setOfferDialog({ open: false, restaurant: null });
+      toast.success(
+        variables.activate
+          ? `Offre activée. Les utilisateurs assignés à ce restaurant en bénéficient.`
+          : `Offre désactivée pour ce restaurant.`
+      );
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Erreur lors de la mise à jour de l\'offre');
     }
   });
 
@@ -182,10 +239,12 @@ export default function AdminRestaurants() {
 
     setUploadingCover(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await base44.integrations.Core.UploadFile({ file, folder: 'restaurants' });
       setFormData({ ...formData, coverPhoto: file_url });
+      toast.success('Photo de couverture téléchargée');
     } catch (error) {
       console.error('Upload error:', error);
+      toast.error("Erreur lors de l'upload");
     } finally {
       setUploadingCover(false);
     }
@@ -197,10 +256,12 @@ export default function AdminRestaurants() {
 
     setUploadingPhoto(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await base44.integrations.Core.UploadFile({ file, folder: 'restaurants' });
       setFormData({ ...formData, photos: [...formData.photos, file_url] });
+      toast.success('Photo ajoutée');
     } catch (error) {
       console.error('Upload error:', error);
+      toast.error("Erreur lors de l'upload");
     } finally {
       setUploadingPhoto(false);
     }
@@ -234,14 +295,12 @@ export default function AdminRestaurants() {
     });
   };
 
-  // Filter restaurants
   const filteredRestaurants = restaurants.filter(r => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return r.name?.toLowerCase().includes(query) || r.city?.toLowerCase().includes(query);
   });
 
-  // Get restaurateur for each restaurant
   const getRestaurateur = (restaurantId) => {
     return users.find(u => u.restaurantId === restaurantId);
   };
@@ -267,7 +326,6 @@ export default function AdminRestaurants() {
       />
 
       <div className="flex-1 min-w-0">
-        {/* Header */}
         <header className="bg-white border-b sticky top-0 z-30">
           <div className="flex items-center justify-between px-4 lg:px-8 h-16">
             <div className="flex items-center gap-4">
@@ -289,9 +347,7 @@ export default function AdminRestaurants() {
           </div>
         </header>
 
-        {/* Content */}
         <main className="p-4 lg:p-8">
-          {/* Search */}
           <div className="mb-6">
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -304,7 +360,6 @@ export default function AdminRestaurants() {
             </div>
           </div>
 
-          {/* Restaurants List */}
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredRestaurants.map(restaurant => {
               const restaurateur = getRestaurateur(restaurant.id);
@@ -334,9 +389,14 @@ export default function AdminRestaurants() {
                         </div>
                       </div>
 
-                      <Badge variant={restaurant.isActive ? 'default' : 'secondary'}>
-                        {restaurant.isActive ? 'Actif' : 'Inactif'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {restaurant.ownerHasActiveSubscription && (
+                          <Badge className="bg-green-600">Offre active</Badge>
+                        )}
+                        <Badge variant={restaurant.isActive ? 'default' : 'secondary'}>
+                          {restaurant.isActive ? 'Actif' : 'Inactif'}
+                        </Badge>
+                      </div>
                     </div>
 
                     {restaurant.phone && (
@@ -372,7 +432,7 @@ export default function AdminRestaurants() {
 
                     <div className="flex flex-wrap items-center gap-2 pt-3 border-t">
                       {assignedRestaurantId === restaurant.id ? (
-                        <Link to={createPageUrl('BackofficeDashboard')}>
+                        <Link to={createPageUrl('BackofficeDashboard') + `?restaurantId=${restaurant.id}`}>
                           <Button variant="default" size="sm">
                             <Settings className="h-4 w-4 mr-1" />
                             Back-office
@@ -399,6 +459,30 @@ export default function AdminRestaurants() {
                       >
                         <Edit2 className="h-4 w-4 mr-1" />
                         Modifier
+                      </Button>
+                      <Button
+                        variant={restaurant.ownerHasActiveSubscription ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => {
+                          setOfferDialog({ open: true, restaurant });
+                          if (restaurant.ownerHasActiveSubscription) {
+                            const owner = getRestaurateur(restaurant.id);
+                            setOfferFormData({
+                              subscriptionPlan: (owner?.subscriptionPlan || owner?.subscription_plan) || 'pro',
+                              subscriptionEndDate: owner?.subscriptionEndDate
+                                ? format(new Date(owner.subscriptionEndDate), 'yyyy-MM-dd')
+                                : format(addMonths(new Date(), 12), 'yyyy-MM-dd')
+                            });
+                          } else {
+                            setOfferFormData({
+                              subscriptionPlan: 'pro',
+                              subscriptionEndDate: format(addMonths(new Date(), 12), 'yyyy-MM-dd')
+                            });
+                          }
+                        }}
+                      >
+                        <CreditCard className="h-4 w-4 mr-1" />
+                        Offre
                       </Button>
                       <Button
                         variant="outline"
@@ -436,7 +520,6 @@ export default function AdminRestaurants() {
         </main>
       </div>
 
-      {/* Add/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -558,6 +641,7 @@ export default function AdminRestaurants() {
                     onChange={handleCoverPhotoUpload}
                     disabled={uploadingCover}
                   />
+                  {uploadingCover && <div className="text-xs text-blue-500 mt-1">Téléchargement en cours...</div>}
                 </label>
               )}
             </div>
@@ -590,6 +674,7 @@ export default function AdminRestaurants() {
                       onChange={handlePhotoUpload}
                       disabled={uploadingPhoto}
                     />
+                    {uploadingPhoto && <div className="text-xs text-blue-500">...</div>}
                   </label>
                 )}
               </div>
@@ -626,7 +711,117 @@ export default function AdminRestaurants() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      <Dialog open={offerDialog.open} onOpenChange={(open) => setOfferDialog({ open, restaurant: null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Offre — {offerDialog.restaurant?.name}</DialogTitle>
+          </DialogHeader>
+          {offerDialog.restaurant && (
+            <div className="space-y-4 py-4">
+              {offerDialog.restaurant.ownerHasActiveSubscription ? (
+                <>
+                  <p className="text-sm text-gray-600">
+                    Une offre est active pour ce restaurant. Tous les utilisateurs assignés en bénéficient dans leur back-office.
+                  </p>
+                  <div className="space-y-2">
+                    <Label>Plan</Label>
+                    <Select
+                      value={offerFormData.subscriptionPlan}
+                      onValueChange={(v) => setOfferFormData({ ...offerFormData, subscriptionPlan: v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="starter">Essentiel (49€)</SelectItem>
+                        <SelectItem value="pro">Restaurateur (79€)</SelectItem>
+                        <SelectItem value="premium">Elite (109€)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Date de fin</Label>
+                    <Input
+                      type="date"
+                      value={offerFormData.subscriptionEndDate}
+                      onChange={(e) => setOfferFormData({ ...offerFormData, subscriptionEndDate: e.target.value })}
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setOfferMutation.mutate({
+                        restaurant: offerDialog.restaurant,
+                        activate: false
+                      })}
+                      disabled={setOfferMutation.isPending}
+                    >
+                      Désactiver l'offre
+                    </Button>
+                    <Button
+                      onClick={() => setOfferMutation.mutate({
+                        restaurant: offerDialog.restaurant,
+                        activate: true,
+                        plan: offerFormData.subscriptionPlan,
+                        endDate: offerFormData.subscriptionEndDate
+                      })}
+                      disabled={setOfferMutation.isPending}
+                    >
+                      {setOfferMutation.isPending ? 'Enregistrement...' : 'Mettre à jour'}
+                    </Button>
+                  </DialogFooter>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-600">
+                    Activer une offre pour ce restaurant. Tous les utilisateurs assignés à ce restaurant en bénéficieront (réservation en ligne, fonctionnalités back-office).
+                  </p>
+                  <div className="space-y-2">
+                    <Label>Plan</Label>
+                    <Select
+                      value={offerFormData.subscriptionPlan}
+                      onValueChange={(v) => setOfferFormData({ ...offerFormData, subscriptionPlan: v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="starter">Essentiel (49€)</SelectItem>
+                        <SelectItem value="pro">Restaurateur (79€)</SelectItem>
+                        <SelectItem value="premium">Elite (109€)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Date de fin</Label>
+                    <Input
+                      type="date"
+                      value={offerFormData.subscriptionEndDate}
+                      onChange={(e) => setOfferFormData({ ...offerFormData, subscriptionEndDate: e.target.value })}
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setOfferDialog({ open: false, restaurant: null })}
+                    >
+                      Annuler
+                    </Button>
+                    <Button
+                      onClick={() => setOfferMutation.mutate({
+                        restaurant: offerDialog.restaurant,
+                        activate: true,
+                        plan: offerFormData.subscriptionPlan,
+                        endDate: offerFormData.subscriptionEndDate
+                      })}
+                      disabled={setOfferMutation.isPending}
+                    >
+                      {setOfferMutation.isPending ? 'Activation...' : 'Activer l\'offre'}
+                    </Button>
+                  </DialogFooter>
+                </>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={!!deleteRestaurant} onOpenChange={() => setDeleteRestaurant(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

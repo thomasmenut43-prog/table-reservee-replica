@@ -16,16 +16,19 @@ export default function RestaurantCard({ restaurant }) {
             alt={restaurant.name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
+          {/* Assombrir le bas pour la lisibilité du texte */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+          {/* Fondu vers le blanc en bas de l'image */}
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent pointer-events-none" />
           <div className="absolute bottom-0 left-0 right-0 p-4">
-            <h3 className="font-bold text-xl text-white mb-2">
+            <h3 className="font-bold text-xl text-white mb-2 drop-shadow-md">
               {restaurant.name}
             </h3>
             <StarRating rating={restaurant.ratingAvg || 0} count={restaurant.ratingCount || 0} size="sm" />
           </div>
         </div>
       </Link>
-      <div className="p-4 pt-0">
+      <div className="p-4 pt-5">
         <Link to={restaurantUrl}>
           <Button
             className="w-full rounded-3xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"

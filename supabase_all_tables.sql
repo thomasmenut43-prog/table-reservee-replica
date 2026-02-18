@@ -35,17 +35,34 @@ CREATE TABLE public.restaurants (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ==================== FLOOR PLANS (avant tables, pour la FK) ====================
+DROP TABLE IF EXISTS public.floor_plans CASCADE;
+CREATE TABLE public.floor_plans (
+  id TEXT PRIMARY KEY DEFAULT ('floor_' || substr(md5(random()::text), 1, 8)),
+  restaurant_id TEXT REFERENCES public.restaurants(id) ON DELETE CASCADE,
+  name TEXT,
+  is_default BOOLEAN DEFAULT false,
+  layout JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ==================== TABLES ====================
 DROP TABLE IF EXISTS public.tables CASCADE;
 CREATE TABLE public.tables (
   id TEXT PRIMARY KEY DEFAULT ('table_' || substr(md5(random()::text), 1, 8)),
   restaurant_id TEXT REFERENCES public.restaurants(id) ON DELETE CASCADE,
+  floor_plan_id TEXT REFERENCES public.floor_plans(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   seats INTEGER DEFAULT 4,
   zone TEXT DEFAULT 'main',
+  shape TEXT DEFAULT 'square',
   is_joinable BOOLEAN DEFAULT true,
+  status TEXT DEFAULT 'available',
+  is_active BOOLEAN DEFAULT true,
   position_x INTEGER DEFAULT 0,
   position_y INTEGER DEFAULT 0,
+  width INTEGER DEFAULT 60,
+  height INTEGER DEFAULT 40,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -94,16 +111,6 @@ CREATE TABLE public.reviews (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==================== FLOOR PLANS ====================
-DROP TABLE IF EXISTS public.floor_plans CASCADE;
-CREATE TABLE public.floor_plans (
-  id TEXT PRIMARY KEY DEFAULT ('floor_' || substr(md5(random()::text), 1, 8)),
-  restaurant_id TEXT REFERENCES public.restaurants(id) ON DELETE CASCADE,
-  name TEXT,
-  layout JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- ==================== TABLE BLOCKS ====================
 DROP TABLE IF EXISTS public.table_blocks CASCADE;
 CREATE TABLE public.table_blocks (
@@ -112,7 +119,26 @@ CREATE TABLE public.table_blocks (
   table_id TEXT,
   start_date DATE,
   end_date DATE,
+  start_datetime TIMESTAMPTZ,
+  end_datetime TIMESTAMPTZ,
   reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==================== MAP OBJECTS (murs, piliers, bar) ====================
+DROP TABLE IF EXISTS public.map_objects CASCADE;
+CREATE TABLE public.map_objects (
+  id TEXT PRIMARY KEY DEFAULT ('obj_' || substr(md5(random()::text), 1, 8)),
+  restaurant_id TEXT REFERENCES public.restaurants(id) ON DELETE CASCADE,
+  floor_plan_id TEXT REFERENCES public.floor_plans(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  position_x INTEGER DEFAULT 0,
+  position_y INTEGER DEFAULT 0,
+  width INTEGER DEFAULT 60,
+  height INTEGER DEFAULT 40,
+  rotation INTEGER DEFAULT 0,
+  color TEXT,
+  locked BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -139,6 +165,7 @@ ALTER TABLE public.reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.floor_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.table_blocks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.map_objects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
 
 -- Lecture publique pour restaurants
@@ -168,6 +195,9 @@ CREATE POLICY "Authenticated can modify floor_plans" ON public.floor_plans FOR A
 -- Blocages de tables
 CREATE POLICY "Public read table_blocks" ON public.table_blocks FOR SELECT USING (true);
 CREATE POLICY "Authenticated can modify table_blocks" ON public.table_blocks FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Public read map_objects" ON public.map_objects FOR SELECT USING (true);
+CREATE POLICY "Authenticated can modify map_objects" ON public.map_objects FOR ALL USING (auth.role() = 'authenticated');
 
 -- Paramètres plateforme
 CREATE POLICY "Public read settings" ON public.platform_settings FOR SELECT USING (true);

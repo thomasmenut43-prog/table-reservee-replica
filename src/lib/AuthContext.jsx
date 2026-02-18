@@ -2,7 +2,20 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { supabase, supabaseAuth, getUserRole, ADMIN_EMAIL } from '@/lib/supabaseClient';
 import { base44 } from '@/api/base44Client';
 
-const AuthContext = createContext();
+const defaultAuthValue = {
+  user: null,
+  isAuthenticated: false,
+  isLoadingAuth: true,
+  isLoadingPublicSettings: true,
+  authError: null,
+  appPublicSettings: null,
+  login: async () => {},
+  logout: async () => {},
+  navigateToLogin: () => window.location.href = '/',
+  checkAppState: async () => {}
+};
+
+const AuthContext = createContext(defaultAuthValue);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -137,8 +150,5 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  return context ?? defaultAuthValue;
 };

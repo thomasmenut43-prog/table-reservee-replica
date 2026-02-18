@@ -34,7 +34,7 @@ export default function AdminUsers() {
   const [user, setUser] = useState(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('restaurants');
+  const [activeTab, setActiveTab] = useState('all');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -147,7 +147,8 @@ export default function AdminUsers() {
   const changeRole = async (targetUser, newRole) => {
     try {
       await userManagement.updateProfile(targetUser.id, { role: newRole });
-      toast.success(`Rôle changé en ${newRole === 'admin' ? 'Admin' : 'Restaurateur'}`);
+      const roleLabel = { admin: 'Admin', restaurateur: 'Restaurateur', utilisateur: 'Utilisateur' }[newRole] || newRole;
+      toast.success(`Rôle changé en ${roleLabel}`);
       refetchUsers();
     } catch (error) {
       console.error('Error changing role:', error);
@@ -163,7 +164,9 @@ export default function AdminUsers() {
   // Filter users based on active tab and search
   const getFilteredUsers = () => {
     let usersToFilter = [];
-    if (activeTab === 'restaurants') {
+    if (activeTab === 'all') {
+      usersToFilter = users;
+    } else if (activeTab === 'restaurants') {
       usersToFilter = restaurantUsers;
     } else if (activeTab === 'users') {
       usersToFilter = regularUsers;
@@ -284,6 +287,10 @@ export default function AdminUsers() {
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
             <TabsList>
+              <TabsTrigger value="all">
+                <Users className="h-4 w-4 mr-2" />
+                Tous les utilisateurs ({users.length})
+              </TabsTrigger>
               <TabsTrigger value="restaurants">
                 <Store className="h-4 w-4 mr-2" />
                 Restaurateurs ({restaurantUsers.length})
@@ -320,7 +327,7 @@ export default function AdminUsers() {
                                 <div className="flex items-center gap-2">
                                   <p className="font-medium">{targetUser.full_name || 'Sans nom'}</p>
                                   <Badge variant={targetUser.role === 'admin' ? 'default' : 'secondary'}>
-                                    {targetUser.role === 'admin' ? 'Admin' : 'Restaurateur'}
+                                    {targetUser.role === 'admin' ? 'Admin' : targetUser.role === 'utilisateur' ? 'Utilisateur' : 'Restaurateur'}
                                   </Badge>
                                   {targetUser.is_disabled && (
                                     <Badge variant="destructive">Désactivé</Badge>
@@ -350,6 +357,7 @@ export default function AdminUsers() {
                                   <SelectValue placeholder="Rôle" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                  <SelectItem value="utilisateur">Utilisateur</SelectItem>
                                   <SelectItem value="restaurateur">Restaurateur</SelectItem>
                                   <SelectItem value="admin">Admin</SelectItem>
                                 </SelectContent>
@@ -466,13 +474,14 @@ export default function AdminUsers() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="utilisateur">Utilisateur</SelectItem>
                   <SelectItem value="restaurateur">Restaurateur</SelectItem>
                   <SelectItem value="admin">Administrateur</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {createData.role === 'restaurateur' && (
+            {(createData.role === 'restaurateur' || createData.role === 'utilisateur') && (
               <div className="space-y-2">
                 <Label>Restaurant (optionnel)</Label>
                 <Select

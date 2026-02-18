@@ -10,7 +10,6 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import Sidebar from '@/components/backoffice/Sidebar';
-import SubscriptionGuard from '@/components/backoffice/SubscriptionGuard';
 
 const DAYS = [
   { value: 0, label: 'Dimanche' },
@@ -53,8 +52,9 @@ export default function BackofficeSchedules() {
     enabled: !!restaurantId
   });
   
-  // Initialize schedule data
+  // Initialize schedule data (visible pour tous les restaurateurs avec un restaurant)
   useEffect(() => {
+    if (!restaurantId || isLoading) return;
     if (schedules.length > 0) {
       const data = {};
       DAYS.forEach(day => {
@@ -66,15 +66,15 @@ export default function BackofficeSchedules() {
             serviceType: service,
             isOpen: false,
             startTime: service === 'MIDI' ? '12:00' : '19:00',
-            endTime: service === 'MIDI' ? '14:00' : '22:00',
+            endTime: service === 'MIDI' ? '14:00' : '21:30',
             maxCoversPerSlot: null,
             maxReservationsPerSlot: null
           };
         });
       });
       setScheduleData(data);
-    } else if (user?.restaurantId && !isLoading) {
-      // Initialize with defaults if no schedules exist
+    } else {
+      // Aucun horaire en base : initialiser avec des valeurs par défaut pour que le formulaire soit visible
       const data = {};
       DAYS.forEach(day => {
         ['MIDI', 'SOIR'].forEach(service => {
@@ -82,9 +82,9 @@ export default function BackofficeSchedules() {
           data[key] = {
             dayOfWeek: day.value,
             serviceType: service,
-            isOpen: day.value >= 1 && day.value <= 5, // Lundi-Vendredi by default
+            isOpen: day.value >= 1 && day.value <= 5,
             startTime: service === 'MIDI' ? '12:00' : '19:00',
-            endTime: service === 'MIDI' ? '14:00' : '22:00',
+            endTime: service === 'MIDI' ? '14:00' : '21:30',
             maxCoversPerSlot: null,
             maxReservationsPerSlot: null
           };
@@ -133,10 +133,15 @@ export default function BackofficeSchedules() {
       }
     });
     
-    await Promise.all(promises);
-    queryClient.invalidateQueries(['schedules', restaurantId]);
-    setHasChanges(false);
-    toast.success('Horaires enregistrés');
+    try {
+      await Promise.all(promises);
+      queryClient.invalidateQueries(['schedules', restaurantId]);
+      setHasChanges(false);
+      toast.success('Horaires enregistrés');
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.message || 'Erreur lors de l\'enregistrement des horaires');
+    }
   };
   
   if (!user) {
@@ -165,10 +170,6 @@ export default function BackofficeSchedules() {
     );
   }
   
-  const isSubscribed = user?.subscriptionStatus === 'active' && 
-    user?.subscriptionEndDate && 
-    new Date(user.subscriptionEndDate) > new Date();
-
   return (
     <div className="min-h-screen bg-gray-50 flex">
       <Sidebar 

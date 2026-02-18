@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useTheme } from '@/components/ThemeProvider';
@@ -44,15 +45,26 @@ export default function BackofficeDashboard() {
   const [calendarDialog, setCalendarDialog] = useState({ open: false, table: null });
   const [selectedFloorPlan, setSelectedFloorPlan] = useState(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { isDark } = useTheme() || { isDark: false };
   
   // Get restaurantId from URL parameter or user data
-  const urlParams = new URLSearchParams(window.location.search);
+  const urlParams = new URLSearchParams(location.search);
   const restaurantIdFromUrl = urlParams.get('restaurantId');
   
   useEffect(() => {
     base44.auth.me().then(setUser);
   }, []);
+
+  // Mettre restaurantId dans l’URL dès que l’utilisateur est chargé pour garder le contexte entre onglets
+  useEffect(() => {
+    if (!user?.restaurantId || restaurantIdFromUrl) return;
+    const next = `${location.pathname}?restaurantId=${user.restaurantId}`;
+    if (location.search !== `?restaurantId=${user.restaurantId}`) {
+      navigate(next, { replace: true });
+    }
+  }, [user?.restaurantId, restaurantIdFromUrl, location.pathname, location.search, navigate]);
   
   const restaurantId = restaurantIdFromUrl || user?.restaurantId;
   
@@ -85,16 +97,31 @@ export default function BackofficeDashboard() {
     queryFn: () => base44.entities.Reservation.filter({ restaurantId }, '-dateTimeStart'),
     enabled: !!restaurantId
   });
+
+  // Synchronisation temps réel : nouvelles réservations clients visibles immédiatement
+  useEffect(() => {
+    if (!restaurantId) return;
+    const unsubscribe = base44.entities.Reservation.subscribe(() => {
+      queryClient.invalidateQueries(['reservations', restaurantId]);
+    });
+    return unsubscribe;
+  }, [restaurantId, queryClient]);
   
   const { data: tables = [] } = useQuery({
     queryKey: ['tables', restaurantId, selectedFloorPlan],
-    queryFn: () => base44.entities.Table.filter({ restaurantId, floorPlanId: selectedFloorPlan }),
+    queryFn: async () => {
+      const all = await base44.entities.Table.filter({ restaurantId });
+      return all.filter(t => t.floorPlanId === selectedFloorPlan || t.floorPlanId == null);
+    },
     enabled: !!restaurantId && !!selectedFloorPlan
   });
 
   const { data: mapObjects = [] } = useQuery({
     queryKey: ['map-objects', restaurantId, selectedFloorPlan],
-    queryFn: () => base44.entities.MapObject.filter({ restaurantId, floorPlanId: selectedFloorPlan }),
+    queryFn: async () => {
+      const all = await base44.entities.MapObject.filter({ restaurantId });
+      return all.filter(o => o.floorPlanId === selectedFloorPlan || o.floorPlanId == null);
+    },
     enabled: !!restaurantId && !!selectedFloorPlan
   });
   
@@ -262,6 +289,13 @@ export default function BackofficeDashboard() {
       queryClient.invalidateQueries(['current-blocks', restaurantId]);
     }
   });
+
+  const completeReservationMutation = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.Reservation.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['reservations', restaurantId]);
+    }
+  });
   
   if (!user) {
     return null;
@@ -401,6 +435,7 @@ export default function BackofficeDashboard() {
                   todayReservations={todayReservations}
                   onBlockTable={(table, service, soirService) => blockTableMutation.mutate({ tableId: table.id, service, soirService })}
                   onUnblockTable={(blockId) => unblockTableMutation.mutate(blockId)}
+                  onCompleteReservation={(reservationId) => completeReservationMutation.mutate({ id: reservationId, data: { status: 'completed' } })}
                 />
               </CardContent>
             </Card>

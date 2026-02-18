@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { 
-  Menu, Save, Building2, Clock, CreditCard, Shield, Upload, Loader2, X
+import {
+  Menu, Save, Building2, Clock, Shield, Upload, Loader2, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +24,7 @@ import SubscriptionGuard from '@/components/backoffice/SubscriptionGuard';
 import { compressImage } from '@/components/utils/imageCompression';
 
 const CUISINE_TAGS = [
-  'Français', 'Italien', 'Japonais', 'Chinois', 'Indien', 
+  'Français', 'Italien', 'Japonais', 'Chinois', 'Indien',
   'Mexicain', 'Méditerranéen', 'Américain', 'Thaï', 'Libanais',
   'Végétarien', 'Gastronomique', 'Bistrot', 'Brasserie', 'Fruits de mer'
 ];
@@ -36,15 +36,15 @@ export default function BackofficeSettings() {
   const [hasChanges, setHasChanges] = useState(false);
   const [uploading, setUploading] = useState(false);
   const queryClient = useQueryClient();
-  
+
   useEffect(() => {
     base44.auth.me().then(setUser);
   }, []);
-  
+
   const urlParams = new URLSearchParams(window.location.search);
   const urlRestaurantId = urlParams.get('restaurantId');
   const restaurantId = urlRestaurantId || user?.restaurantId;
-  
+
   const { data: restaurant, isLoading } = useQuery({
     queryKey: ['my-restaurant', restaurantId],
     queryFn: async () => {
@@ -54,27 +54,30 @@ export default function BackofficeSettings() {
     },
     enabled: !!restaurantId
   });
-  
+
   useEffect(() => {
     if (restaurant) {
       setFormData(restaurant);
     }
   }, [restaurant]);
-  
+
   const updateRestaurant = useMutation({
     mutationFn: (data) => base44.entities.Restaurant.update(restaurant.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries(['my-restaurant', restaurantId]);
       setHasChanges(false);
       toast.success('Paramètres enregistrés');
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Erreur lors de l\'enregistrement');
     }
   });
-  
+
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setHasChanges(true);
   };
-  
+
   const handleTagToggle = (tag) => {
     const currentTags = formData.cuisineTags || [];
     const newTags = currentTags.includes(tag)
@@ -82,50 +85,64 @@ export default function BackofficeSettings() {
       : [...currentTags, tag];
     handleChange('cuisineTags', newTags);
   };
-  
+
   const handleCoverUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setUploading(true);
-    const compressedFile = await compressImage(file);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file: compressedFile });
-    handleChange('coverPhoto', file_url);
-    setUploading(false);
+    try {
+      const compressedFile = await compressImage(file);
+      const { file_url } = await base44.integrations.Core.UploadFile({ file: compressedFile, folder: 'restaurants' });
+      handleChange('coverPhoto', file_url);
+      toast.success('Bannière mise à jour');
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'upload");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     const currentPhotos = formData.photos || [];
     if (currentPhotos.length >= 4) {
       toast.error('Maximum 4 photos autorisées');
       return;
     }
-    
+
     setUploading(true);
-    const compressedFile = await compressImage(file);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file: compressedFile });
-    handleChange('photos', [...currentPhotos, file_url]);
-    setUploading(false);
+    try {
+      const compressedFile = await compressImage(file);
+      const { file_url } = await base44.integrations.Core.UploadFile({ file: compressedFile, folder: 'restaurants' });
+      handleChange('photos', [...currentPhotos, file_url]);
+      toast.success('Photo ajoutée');
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'upload");
+    } finally {
+      setUploading(false);
+    }
   };
-  
+
   const removePhoto = (url) => {
     const newPhotos = (formData.photos || []).filter(p => p !== url);
     handleChange('photos', newPhotos);
   };
-  
+
   const handleSave = () => {
     updateRestaurant.mutate(formData);
   };
-  
+
   if (!user) {
     return null;
   }
-  
+
   const isAdmin = user.role === 'admin';
-  
+
   if (!restaurantId && !isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -136,7 +153,7 @@ export default function BackofficeSettings() {
       </div>
     );
   }
-  
+
   if (!restaurantId && isAdmin) {
     const RestaurantSelector = React.lazy(() => import('@/components/backoffice/RestaurantSelector'));
     return (
@@ -145,21 +162,21 @@ export default function BackofficeSettings() {
       </React.Suspense>
     );
   }
-  
-  const isSubscribed = user?.subscriptionStatus === 'active' && 
-    user?.subscriptionEndDate && 
+
+  const isSubscribed = user?.subscriptionStatus === 'active' &&
+    user?.subscriptionEndDate &&
     new Date(user.subscriptionEndDate) > new Date();
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar 
-        user={user} 
+      <Sidebar
+        user={user}
         restaurant={restaurant}
         isAdmin={false}
         isMobileOpen={isMobileOpen}
         setIsMobileOpen={setIsMobileOpen}
       />
-      
+
       <div className="flex-1 min-w-0">
         {/* Header */}
         <header className="bg-white border-b sticky top-0 z-30">
@@ -175,9 +192,9 @@ export default function BackofficeSettings() {
               </Button>
               <h1 className="text-xl font-bold text-gray-900">Paramètres</h1>
             </div>
-            
-            <Button 
-              onClick={handleSave} 
+
+            <Button
+              onClick={handleSave}
               disabled={!hasChanges || updateRestaurant.isPending}
             >
               {updateRestaurant.isPending ? (
@@ -189,7 +206,7 @@ export default function BackofficeSettings() {
             </Button>
           </div>
         </header>
-        
+
         {/* Content */}
         <main className="p-4 lg:p-8 max-w-4xl">
           <div className="space-y-6">
@@ -218,7 +235,7 @@ export default function BackofficeSettings() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Adresse</Label>
                   <Input
@@ -226,7 +243,7 @@ export default function BackofficeSettings() {
                     onChange={(e) => handleChange('address', e.target.value)}
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Latitude</Label>
@@ -250,8 +267,8 @@ export default function BackofficeSettings() {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Pour trouver les coordonnées exactes : 
-                  <a 
+                  Pour trouver les coordonnées exactes :
+                  <a
                     href={`https://www.google.com/maps/search/${encodeURIComponent(formData.address + ', ' + formData.city)}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -260,7 +277,7 @@ export default function BackofficeSettings() {
                     Ouvrir dans Google Maps
                   </a>
                 </p>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Téléphone</Label>
@@ -278,7 +295,7 @@ export default function BackofficeSettings() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Description</Label>
                   <Textarea
@@ -287,7 +304,7 @@ export default function BackofficeSettings() {
                     rows={4}
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Types de cuisine</Label>
                   <div className="flex flex-wrap gap-2">
@@ -303,7 +320,7 @@ export default function BackofficeSettings() {
                     ))}
                   </div>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Photo de bannière</Label>
@@ -341,7 +358,7 @@ export default function BackofficeSettings() {
                       </label>
                     )}
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Photos du restaurant (max 4)</Label>
                     <p className="text-xs text-gray-500">Ces photos seront affichées en bas de la page</p>
@@ -381,7 +398,7 @@ export default function BackofficeSettings() {
                 </div>
               </CardContent>
             </Card>
-            
+
             {/* Booking Settings */}
             <Card>
               <CardHeader>
@@ -409,7 +426,7 @@ export default function BackofficeSettings() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Délai minimum (minutes avant)</Label>
@@ -428,7 +445,7 @@ export default function BackofficeSettings() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="flex items-center justify-between py-4 border-t">
                   <div>
                     <Label>Confirmation automatique</Label>
@@ -441,7 +458,7 @@ export default function BackofficeSettings() {
                     onCheckedChange={(checked) => handleChange('autoConfirmEnabled', checked)}
                   />
                 </div>
-                
+
                 <div className="flex items-center justify-between py-4 border-t">
                   <div>
                     <Label>Combinaison de tables</Label>
@@ -454,7 +471,7 @@ export default function BackofficeSettings() {
                     onCheckedChange={(checked) => handleChange('tableJoiningEnabled', checked)}
                   />
                 </div>
-                
+
                 <div className="flex items-center justify-between py-4 border-t">
                   <div>
                     <Label>Liste d'attente</Label>
@@ -467,7 +484,7 @@ export default function BackofficeSettings() {
                     onCheckedChange={(checked) => handleChange('waitlistEnabled', checked)}
                   />
                 </div>
-                
+
                 <div className="space-y-2 pt-4 border-t">
                   <Label>Seuil groupe (mise en attente auto)</Label>
                   <p className="text-sm text-gray-500 mb-2">
@@ -481,68 +498,7 @@ export default function BackofficeSettings() {
                 </div>
               </CardContent>
             </Card>
-            
-            {/* Deposit Settings */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Acompte
-                </CardTitle>
-                <CardDescription>
-                  Demandez un acompte pour les réservations (le paiement est géré hors plateforme)
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between py-2">
-                  <Label>Activer l'acompte</Label>
-                  <Switch
-                    checked={formData.depositEnabled ?? false}
-                    onCheckedChange={(checked) => handleChange('depositEnabled', checked)}
-                  />
-                </div>
-                
-                {formData.depositEnabled && (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Type</Label>
-                        <Select
-                          value={formData.depositType || 'fixed'}
-                          onValueChange={(value) => handleChange('depositType', value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="fixed">Montant fixe (€)</SelectItem>
-                            <SelectItem value="percent">Pourcentage (%)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Valeur</Label>
-                        <Input
-                          type="number"
-                          value={formData.depositValue || 0}
-                          onChange={(e) => handleChange('depositValue', parseFloat(e.target.value))}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label>Conditions</Label>
-                      <Textarea
-                        value={formData.depositConditionsText || ''}
-                        onChange={(e) => handleChange('depositConditionsText', e.target.value)}
-                        placeholder="Ex: L'acompte sera déduit de la note finale..."
-                      />
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-            
+
             {/* Anti-spam */}
             <Card>
               <CardHeader>

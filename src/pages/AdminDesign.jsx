@@ -23,15 +23,15 @@ export default function AdminDesign() {
     bannerAdUrl: '',
     bannerAdLink: ''
   });
-  
+
   const queryClient = useQueryClient();
-  
+
   useEffect(() => {
     base44.auth.me().then(setUser);
   }, []);
-  
+
   const isAdmin = user?.role === 'admin';
-  
+
   const { data: settings } = useQuery({
     queryKey: ['platform-settings'],
     queryFn: async () => {
@@ -40,7 +40,7 @@ export default function AdminDesign() {
     },
     enabled: isAdmin
   });
-  
+
   useEffect(() => {
     if (settings) {
       setFormData({
@@ -53,7 +53,7 @@ export default function AdminDesign() {
       });
     }
   }, [settings]);
-  
+
   const saveSettings = useMutation({
     mutationFn: async (data) => {
       if (settings) {
@@ -65,31 +65,33 @@ export default function AdminDesign() {
     onSuccess: () => {
       queryClient.invalidateQueries(['platform-settings']);
       toast.success('Paramètres enregistrés avec succès');
-    }
+    },
+    onError: (err) => toast.error(err?.message || 'Impossible d\'enregistrer les paramètres')
   });
-  
+
   const handleUploadLogo = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setIsUploading(true);
     try {
       const compressedFile = await compressImage(file);
-      const result = await base44.integrations.Core.UploadFile({ file: compressedFile });
+      const result = await base44.integrations.Core.UploadFile({ file: compressedFile, folder: 'design' });
       setFormData({ ...formData, logoUrl: result.file_url });
       toast.success('Logo téléchargé avec succès');
     } catch (error) {
+      console.error(error);
       toast.error('Erreur lors du téléchargement');
     } finally {
       setIsUploading(false);
     }
   };
-  
+
   const handleSubmit = (e) => {
     e.preventDefault();
     saveSettings.mutate(formData);
   };
-  
+
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -100,16 +102,16 @@ export default function AdminDesign() {
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar 
-        user={user} 
+      <Sidebar
+        user={user}
         isAdmin={true}
         isMobileOpen={isMobileOpen}
         setIsMobileOpen={setIsMobileOpen}
       />
-      
+
       <div className="flex-1 min-w-0">
         {/* Header */}
         <header className="bg-white border-b sticky top-0 z-30">
@@ -130,7 +132,7 @@ export default function AdminDesign() {
             </div>
           </div>
         </header>
-        
+
         {/* Content */}
         <main className="p-4 lg:p-8">
           <form onSubmit={handleSubmit} className="max-w-3xl space-y-6">
@@ -151,7 +153,7 @@ export default function AdminDesign() {
                     placeholder="https://exemple.com/logo.png"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Ou télécharger un logo</Label>
                   <div className="flex items-center gap-3">
@@ -173,20 +175,20 @@ export default function AdminDesign() {
                     />
                   </div>
                 </div>
-                
+
                 {formData.logoUrl && (
                   <div className="border rounded-lg p-4 bg-gray-50">
                     <Label className="mb-2 block">Aperçu</Label>
-                    <img 
-                      src={formData.logoUrl} 
-                      alt="Logo" 
+                    <img
+                      src={formData.logoUrl}
+                      alt="Logo"
                       className="h-12 object-contain"
                     />
                   </div>
                 )}
               </CardContent>
             </Card>
-            
+
             {/* Hero Section */}
             <Card>
               <CardHeader>
@@ -204,7 +206,7 @@ export default function AdminDesign() {
                     placeholder="Réservez votre table"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Sous-titre (texte en surbrillance)</Label>
                   <Input
@@ -213,7 +215,7 @@ export default function AdminDesign() {
                     placeholder="en quelques clics"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Description</Label>
                   <Textarea
@@ -223,7 +225,7 @@ export default function AdminDesign() {
                     rows={3}
                   />
                 </div>
-                
+
                 <div className="border rounded-lg p-4 bg-gray-50">
                   <Label className="mb-2 block">Aperçu</Label>
                   <div className="space-y-2">
@@ -239,7 +241,7 @@ export default function AdminDesign() {
                 </div>
               </CardContent>
             </Card>
-            
+
             {/* Banner Ad Section */}
             <Card>
               <CardHeader>
@@ -257,7 +259,7 @@ export default function AdminDesign() {
                     placeholder="https://exemple.com/banner.jpg"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Ou télécharger une bannière</Label>
                   <div className="flex items-center gap-3">
@@ -280,10 +282,11 @@ export default function AdminDesign() {
                         setIsUploading(true);
                         try {
                           const compressedFile = await compressImage(file);
-                          const result = await base44.integrations.Core.UploadFile({ file: compressedFile });
+                          const result = await base44.integrations.Core.UploadFile({ file: compressedFile, folder: 'design' });
                           setFormData({ ...formData, bannerAdUrl: result.file_url });
                           toast.success('Bannière téléchargée avec succès');
                         } catch (error) {
+                          console.error(error);
                           toast.error('Erreur lors du téléchargement');
                         } finally {
                           setIsUploading(false);
@@ -293,7 +296,7 @@ export default function AdminDesign() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Lien de destination (optionnel)</Label>
                   <Input
@@ -302,20 +305,20 @@ export default function AdminDesign() {
                     placeholder="https://exemple.com"
                   />
                 </div>
-                
+
                 {formData.bannerAdUrl && (
                   <div className="border rounded-lg p-4 bg-gray-50">
                     <Label className="mb-2 block">Aperçu</Label>
-                    <img 
-                      src={formData.bannerAdUrl} 
-                      alt="Bannière pub" 
+                    <img
+                      src={formData.bannerAdUrl}
+                      alt="Bannière pub"
                       className="w-full rounded-lg"
                     />
                   </div>
                 )}
               </CardContent>
             </Card>
-            
+
             {/* Save Button */}
             <div className="flex justify-end">
               <Button type="submit" disabled={saveSettings.isPending}>
