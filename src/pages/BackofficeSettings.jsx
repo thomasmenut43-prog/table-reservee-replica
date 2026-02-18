@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import {
-  Menu, Save, Building2, Clock, CreditCard, Shield, Upload, Loader2, X
+  Menu, Save, Building2, Clock, Shield, Upload, Loader2, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -496,67 +496,6 @@ export default function BackofficeSettings() {
                     onChange={(e) => handleChange('groupPendingThreshold', parseInt(e.target.value))}
                   />
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Deposit Settings */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Acompte
-                </CardTitle>
-                <CardDescription>
-                  Demandez un acompte pour les réservations (le paiement est géré hors plateforme)
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between py-2">
-                  <Label>Activer l'acompte</Label>
-                  <Switch
-                    checked={formData.depositEnabled ?? false}
-                    onCheckedChange={(checked) => handleChange('depositEnabled', checked)}
-                  />
-                </div>
-
-                {formData.depositEnabled && (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Type</Label>
-                        <Select
-                          value={formData.depositType || 'fixed'}
-                          onValueChange={(value) => handleChange('depositType', value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="fixed">Montant fixe (€)</SelectItem>
-                            <SelectItem value="percent">Pourcentage (%)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Valeur</Label>
-                        <Input
-                          type="number"
-                          value={formData.depositValue || 0}
-                          onChange={(e) => handleChange('depositValue', parseFloat(e.target.value))}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Conditions</Label>
-                      <Textarea
-                        value={formData.depositConditionsText || ''}
-                        onChange={(e) => handleChange('depositConditionsText', e.target.value)}
-                        placeholder="Ex: L'acompte sera déduit de la note finale..."
-                      />
-                    </div>
-                  </>
-                )}
               </CardContent>
             </Card>
 

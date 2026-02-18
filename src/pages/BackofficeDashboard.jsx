@@ -97,6 +97,15 @@ export default function BackofficeDashboard() {
     queryFn: () => base44.entities.Reservation.filter({ restaurantId }, '-dateTimeStart'),
     enabled: !!restaurantId
   });
+
+  // Synchronisation temps réel : nouvelles réservations clients visibles immédiatement
+  useEffect(() => {
+    if (!restaurantId) return;
+    const unsubscribe = base44.entities.Reservation.subscribe(() => {
+      queryClient.invalidateQueries(['reservations', restaurantId]);
+    });
+    return unsubscribe;
+  }, [restaurantId, queryClient]);
   
   const { data: tables = [] } = useQuery({
     queryKey: ['tables', restaurantId, selectedFloorPlan],
@@ -280,6 +289,13 @@ export default function BackofficeDashboard() {
       queryClient.invalidateQueries(['current-blocks', restaurantId]);
     }
   });
+
+  const completeReservationMutation = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.Reservation.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['reservations', restaurantId]);
+    }
+  });
   
   if (!user) {
     return null;
@@ -419,6 +435,7 @@ export default function BackofficeDashboard() {
                   todayReservations={todayReservations}
                   onBlockTable={(table, service, soirService) => blockTableMutation.mutate({ tableId: table.id, service, soirService })}
                   onUnblockTable={(blockId) => unblockTableMutation.mutate(blockId)}
+                  onCompleteReservation={(reservationId) => completeReservationMutation.mutate({ id: reservationId, data: { status: 'completed' } })}
                 />
               </CardContent>
             </Card>

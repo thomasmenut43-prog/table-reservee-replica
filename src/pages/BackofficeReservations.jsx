@@ -37,9 +37,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 
-// Créneaux horaires par service (tranches de 30 min)
-const MIDI_SLOTS = ['12:00', '12:30', '13:00', '13:30', '14:00'];
-const SOIR_SLOTS = ['19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00'];
+// Créneaux horaires par service (tranches de 15 min) : midi 12h-14h, soir 19h-21h30
+const MIDI_SLOTS = ['12:00', '12:15', '12:30', '12:45', '13:00', '13:15', '13:30', '13:45', '14:00'];
+const SOIR_SLOTS = ['19:00', '19:15', '19:30', '19:45', '20:00', '20:15', '20:30', '20:45', '21:00', '21:15', '21:30'];
 const getTimeSlotsForService = (serviceType) =>
   serviceType === 'SOIR' ? SOIR_SLOTS : MIDI_SLOTS;
 
@@ -90,6 +90,15 @@ export default function BackofficeReservations() {
     queryFn: () => base44.entities.Reservation.filter({ restaurantId }, '-dateTimeStart'),
     enabled: !!restaurantId
   });
+
+  // Synchronisation temps réel : nouvelles réservations clients visibles immédiatement
+  useEffect(() => {
+    if (!restaurantId) return;
+    const unsubscribe = base44.entities.Reservation.subscribe(() => {
+      queryClient.invalidateQueries(['reservations', restaurantId]);
+    });
+    return unsubscribe;
+  }, [restaurantId, queryClient]);
   
   const { data: tables = [] } = useQuery({
     queryKey: ['tables', restaurantId],

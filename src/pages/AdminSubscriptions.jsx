@@ -55,10 +55,22 @@ export default function AdminSubscriptions() {
 
   const updateUserMutation = useMutation({
     mutationFn: ({ userId, data }) => base44.entities.User.update(userId, data),
-    onSuccess: () => {
+    onSuccess: async (_, variables) => {
       queryClient.invalidateQueries(['all-users']);
       setEditDialog({ open: false, user: null });
       toast.success('Abonnement enregistré');
+      // Synchroniser la résa en ligne côté client : restaurant disponible si offre active
+      const restaurantId = variables.restaurantId;
+      const ownerHasActiveSubscription = variables.ownerHasActiveSubscription;
+      if (restaurantId != null && typeof ownerHasActiveSubscription === 'boolean') {
+        try {
+          await base44.entities.Restaurant.update(restaurantId, { ownerHasActiveSubscription });
+          queryClient.invalidateQueries(['restaurant', restaurantId]);
+          queryClient.invalidateQueries(['restaurants']);
+        } catch (e) {
+          console.error('Mise à jour restaurant owner_has_active_subscription:', e);
+        }
+      }
     },
     onError: (err) => {
       console.error('Erreur enregistrement abonnement:', err);
@@ -97,16 +109,11 @@ export default function AdminSubscriptions() {
   };
 
   const handleSubmit = () => {
-    const dataToUpdate = {
-      subscriptionStatus: formData.subscriptionStatus,
-      subscriptionEndDate: formData.subscriptionEndDate,
-      subscription_plan: formData.subscriptionPlan // Ensure we send the correct snake_case key if DB expects it, or matches what User.update handles
-      // Note: User.update likely handles the mapping, but sending subscription_plan assumes the entity is directly mapped to DB columns
-    };
-
-    // We'll stick to camelCase in mutation if the service handles it, otherwise mapped. 
-    // Looking at previous patterns, let's send both or relies on the service.
-    // Assuming base44.entities.User.update sends ...data directly to Supabase
+    const restaurantId = editDialog.user?.restaurantId || editDialog.user?.restaurant_id;
+    const isActive =
+      formData.subscriptionStatus === 'active' &&
+      formData.subscriptionEndDate &&
+      new Date(formData.subscriptionEndDate) > new Date();
 
     updateUserMutation.mutate({
       userId: editDialog.user.id,
@@ -114,17 +121,13 @@ export default function AdminSubscriptions() {
         subscriptionStatus: formData.subscriptionStatus,
         subscriptionEndDate: formData.subscriptionEndDate,
         subscription_plan: formData.subscriptionPlan
-      }
-    }, {
-      onSuccess: () => {
-        // toast.success is not imported but should be if available. 
-        // For now relying on default mutation onSuccess or simply closing.
-        // Let's add simple alert or console if no toast available in this file.
-        // Actually, let's add toast import first if needed, but not to break flow I'll assume it works
       },
+      restaurantId,
+      ownerHasActiveSubscription: isActive
+    }, {
       onError: (err) => {
-        console.error("Failed to update subscription", err);
-        alert("Erreur lors de la mise à jour");
+        console.error('Failed to update subscription', err);
+        alert('Erreur lors de la mise à jour');
       }
     });
   };

@@ -18,7 +18,8 @@ export default function DashboardTableMap({
   currentBlocks = [],
   todayReservations = [],
   onBlockTable,
-  onUnblockTable
+  onUnblockTable,
+  onCompleteReservation
 }) {
   const [selectedTable, setSelectedTable] = useState(null);
   const [blockDialog, setBlockDialog] = useState({ open: false, table: null });
@@ -26,7 +27,7 @@ export default function DashboardTableMap({
   const [blockSoirService, setBlockSoirService] = useState(1);
 
   const isTableBlocked = (tableId) => {
-    return currentBlocks.find(b => b.tableId === tableId);
+    return currentBlocks.find(b => (b.tableId ?? b.table_id) === tableId);
   };
 
   const isTableReserved = (tableId) => {
@@ -39,10 +40,21 @@ export default function DashboardTableMap({
     );
   };
 
+  const getCurrentReservationsForTable = (tableId) => {
+    const now = new Date();
+    return todayReservations.filter(r =>
+      r.tableIds?.includes(tableId) &&
+      r.status === 'confirmed' &&
+      new Date(r.dateTimeStart) <= now &&
+      new Date(r.dateTimeEnd) >= now
+    );
+  };
+
   const handleTableClick = (table) => {
     setSelectedTable(table);
     const blocked = isTableBlocked(table.id);
-    if (!blocked) {
+    const reserved = isTableReserved(table.id);
+    if (!blocked && !reserved) {
       setBlockDialog({ open: true, table });
     }
   };
@@ -58,11 +70,9 @@ export default function DashboardTableMap({
   };
 
   const handleUnblock = (tableId) => {
-    const block = currentBlocks.find(b => b.tableId === tableId);
-    if (block) {
-      onUnblockTable(block.id);
-      setSelectedTable(null);
-    }
+    const blocks = currentBlocks.filter(b => (b.tableId ?? b.table_id) === tableId);
+    blocks.forEach(b => b.id && onUnblockTable(b.id));
+    if (blocks.length) setSelectedTable(null);
   };
 
   const getTableColor = (table) => {
@@ -181,6 +191,18 @@ export default function DashboardTableMap({
                 >
                   <CheckCircle className="h-4 w-4 mr-2" />
                   Libérer
+                </Button>
+              ) : isTableReserved(selectedTable.id) && onCompleteReservation ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    getCurrentReservationsForTable(selectedTable.id).forEach(r => onCompleteReservation(r.id));
+                    setSelectedTable(null);
+                  }}
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Libérer la table
                 </Button>
               ) : (
                 <Badge className={isTableReserved(selectedTable.id) ? 'bg-red-500' : 'bg-green-500'}>

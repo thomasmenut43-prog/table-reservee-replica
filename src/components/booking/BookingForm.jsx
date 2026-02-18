@@ -64,6 +64,11 @@ export default function BookingForm({
     return services;
   }, [selectedDate, schedules]);
   
+  // Plages réservation RestoPonot : midi 12h-14h, soir 19h-21h30, créneaux 15 min
+  const hasOffer = restaurant?.ownerHasActiveSubscription === true;
+  const OFFER_MIDI = { start: '12:00', end: '14:00' };
+  const OFFER_SOIR = { start: '19:00', end: '21:30' };
+
   // Generate time slots
   const timeSlots = useMemo(() => {
     if (!selectedDate || !serviceType) return [];
@@ -71,19 +76,25 @@ export default function BookingForm({
     if (!schedule) return [];
     
     const slots = [];
-    const interval = restaurant.slotIntervalMinutes || 15;
+    const interval = hasOffer ? 15 : (restaurant.slotIntervalMinutes || 15);
     const minAdvance = restaurant.minAdvanceMinutes || 0;
+
+    let startStr = schedule.startTime;
+    let endStr = schedule.endTime;
+    if (hasOffer) {
+      const range = serviceType === 'MIDI' ? OFFER_MIDI : OFFER_SOIR;
+      startStr = schedule.startTime > range.start ? schedule.startTime : range.start;
+      endStr = schedule.endTime < range.end ? schedule.endTime : range.end;
+    }
     
-    const [startH, startM] = schedule.startTime.split(':').map(Number);
-    const [endH, endM] = schedule.endTime.split(':').map(Number);
+    const [startH, startM] = startStr.split(':').map(Number);
+    const [endH, endM] = endStr.split(':').map(Number);
     
     let slotTime = setMinutes(setHours(selectedDate, startH), startM);
     const endTime = setMinutes(setHours(selectedDate, endH), endM);
     const now = new Date();
     const minTime = addMinutes(now, minAdvance);
     
-    // For same day bookings, only show slots after minTime
-    // For future days, show all slots
     const isToday = format(selectedDate, 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd');
     
     while (isBefore(slotTime, endTime)) {
@@ -94,7 +105,7 @@ export default function BookingForm({
     }
     
     return slots;
-  }, [selectedDate, serviceType, restaurant, schedules]);
+  }, [selectedDate, serviceType, restaurant, schedules, hasOffer]);
   
   // Calculate max capacity and available tables
   const { maxCapacity, availableTables } = useMemo(() => {

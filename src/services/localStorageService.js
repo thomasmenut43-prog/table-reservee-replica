@@ -39,6 +39,7 @@ const fieldNameMap = {
   ratingCount: 'rating_count',
   postalCode: 'postal_code',
   ownerId: 'owner_id',
+  ownerHasActiveSubscription: 'owner_has_active_subscription',
   created_date: 'created_at',
   updated_date: 'updated_at',
   // Table fields

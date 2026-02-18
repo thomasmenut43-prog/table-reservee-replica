@@ -118,13 +118,30 @@ export default function RestaurantPage() {
   });
   
   const createReservation = useMutation({
-    mutationFn: (data) => base44.entities.Reservation.create({
-      ...data,
-      restaurantId
-    }),
+    mutationFn: (data) => {
+      // Payload explicite pour la base : enregistrement et sync avec le backoffice restaurant
+      return base44.entities.Reservation.create({
+        restaurantId,
+        firstName: data.firstName ?? '',
+        lastName: data.lastName ?? '',
+        phone: data.phone ?? null,
+        email: data.email || null,
+        guestsCount: Number(data.guestsCount) || 2,
+        serviceType: data.serviceType ?? 'MIDI',
+        dateTimeStart: data.dateTimeStart,
+        dateTimeEnd: data.dateTimeEnd ?? null,
+        tableIds: Array.isArray(data.tableIds) ? data.tableIds : [],
+        status: data.status ?? 'pending',
+        reference: data.reference ?? null,
+        comment: data.comment || null
+      });
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries(['reservations', restaurantId]);
       setBookingSuccess(data);
+    },
+    onError: (err) => {
+      console.error('Erreur création réservation:', err);
     }
   });
 
@@ -160,7 +177,10 @@ export default function RestaurantPage() {
     return { day, midi, soir };
   });
   
-  const isOnlineBookingEnabled = restaurant?.onlineBookingEnabled === true;
+  // Résa en ligne disponible pour tous les restaurants dont le restaurateur a une offre active
+  const isOnlineBookingEnabled =
+    restaurant?.ownerHasActiveSubscription === true ||
+    (restaurant?.ownerHasActiveSubscription == null && restaurant?.onlineBookingEnabled === true);
   
   if (loadingRestaurant) {
     return (
